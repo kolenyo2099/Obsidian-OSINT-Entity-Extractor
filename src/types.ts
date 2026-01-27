@@ -12,6 +12,8 @@ export interface PluginSettings {
   defaultTags: string;
   openAfterCreate: boolean;
   maxChars: number;
+  useCustomPrompt: boolean;
+  customPrompt: string;
   apiKey?: string; // fallback storage when SecretStorage is unavailable
 }
 
@@ -21,5 +23,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   defaultTags: "news",
   openAfterCreate: true,
   maxChars: 12000,
+  useCustomPrompt: false,
+  customPrompt: "",
   apiKey: ""
 };

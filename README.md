@@ -34,6 +34,7 @@ Import any readable web article into your vault, run it through OpenAI's Respons
 - **Default tags**: comma-separated tags injected into the YAML `tags` list.  
 - **Trim article text at**: character limit sent to OpenAI to avoid large prompts (default 12,000).  
 - **Open created note**: open the note after it is written to disk.
+- **Prompt (advanced)**: toggle to use a custom prompt. You can insert the built-in prompt into the text box to edit a copy, clear to start fresh, and revert to the shipped prompt at any time.
 
 ## Notes and safety
 - Avoid committing `data.json` (contains stored settings/key); it is already in `.gitignore`.  

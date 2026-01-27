@@ -2,13 +2,19 @@ import OpenAI from "openai";
 import type { ExtractedArticle } from "./types";
 import { PROMPT_TEMPLATE } from "./prompt";
 
-export function buildPrompt(url: string, meta: ExtractedArticle, defaultTags?: string): string {
+export function buildPrompt(
+  url: string,
+  meta: ExtractedArticle,
+  defaultTags?: string,
+  promptTemplate: string = PROMPT_TEMPLATE
+): string {
   const extractionNote =
     meta.text.length < 500
       ? "\n\nNOTE: The extracted article text is short; the page may be paywalled or blocked. Do NOT invent missing details - format only what is provided.\n"
       : "";
 
-  const base = PROMPT_TEMPLATE.replace("{url}", url)
+  const base = promptTemplate
+    .replace("{url}", url)
     .replace("{title}", meta.title || "")
     .replace("{authors}", meta.authors.join(", "))
     .replace("{published}", meta.published || "")
@@ -26,10 +32,11 @@ export async function formatWithOpenAI(
   model: string,
   url: string,
   meta: ExtractedArticle,
-  defaultTags?: string
+  defaultTags?: string,
+  promptTemplate?: string
 ): Promise<string> {
   const client = getClient(apiKey);
-  const prompt = buildPrompt(url, meta, defaultTags);
+  const prompt = buildPrompt(url, meta, defaultTags, promptTemplate || PROMPT_TEMPLATE);
 
   const resp = await client.responses.create({
     model,

@@ -142,12 +142,21 @@ export default class UrlToVaultPlugin extends Plugin {
         new Notice("No article text extracted; sending minimal content to OpenAI.", 6000);
       }
 
+      const promptTemplate =
+        this.settings.useCustomPrompt && this.settings.customPrompt.trim()
+          ? this.settings.customPrompt
+          : undefined;
+      if (this.settings.useCustomPrompt && !promptTemplate) {
+        new Notice("Custom prompt is empty; using default prompt instead.", 5000);
+      }
+
       const note = await formatWithOpenAI(
         apiKey,
         this.settings.model,
         url,
         meta,
-        this.settings.defaultTags
+        this.settings.defaultTags,
+        promptTemplate
       );
       const validated = ensureFrontmatterPresent(note);
       const rawHeader = "## Extracted article (plaintext)";

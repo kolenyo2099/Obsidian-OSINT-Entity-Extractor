@@ -1,5 +1,6 @@
-import { App, PluginSettingTab, Setting, debounce } from "obsidian";
+import { App, PluginSettingTab, Setting, debounce, TextAreaComponent } from "obsidian";
 import type UrlToVaultPlugin from "./main";
+import { PROMPT_TEMPLATE } from "./prompt";
 
 export class UrlToVaultSettingTab extends PluginSettingTab {
   plugin: UrlToVaultPlugin;
@@ -96,5 +97,74 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
             this.saveSettingsDebounced();
           })
       );
+
+    containerEl.createEl("h3", { text: "Prompt (advanced)" });
+
+    new Setting(containerEl)
+      .setName("Use custom prompt")
+      .setDesc("When on, the prompt below overrides the built-in prompt.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useCustomPrompt)
+          .onChange(async (value) => {
+            this.plugin.settings.useCustomPrompt = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    let promptArea: TextAreaComponent | null = null;
+
+    const promptSetting = new Setting(containerEl)
+      .setName("Custom prompt")
+      .setDesc(
+        "Leave blank to keep using the built-in prompt. Insert the default to edit a copy, or clear to start fresh."
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Insert default prompt")
+          .setTooltip("Copy the shipped prompt into the box so you can edit it.")
+          .onClick(() => {
+            this.plugin.settings.customPrompt = PROMPT_TEMPLATE;
+            if (promptArea) promptArea.setValue(PROMPT_TEMPLATE);
+            this.saveSettingsDebounced();
+          })
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Clear")
+          .setTooltip("Empty the custom prompt box.")
+          .onClick(() => {
+            this.plugin.settings.customPrompt = "";
+            if (promptArea) promptArea.setValue("");
+            this.saveSettingsDebounced();
+          })
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Revert to default")
+          .setTooltip("Stop using a custom prompt and discard it.")
+          .onClick(() => {
+            const confirmed = window.confirm("Revert to the built-in prompt and discard the custom one?");
+            if (!confirmed) return;
+            this.plugin.settings.useCustomPrompt = false;
+            this.plugin.settings.customPrompt = "";
+            if (promptArea) promptArea.setValue("");
+            this.saveSettingsDebounced();
+            // Also refresh the toggle state visually
+            this.display();
+          })
+      );
+
+    promptArea = promptSetting.addTextArea((text) =>
+      text
+        .setPlaceholder("Custom prompt (optional)")
+        .setValue(this.plugin.settings.customPrompt)
+        .onChange(async (value) => {
+          this.plugin.settings.customPrompt = value;
+          this.saveSettingsDebounced();
+        })
+    );
+    promptArea.inputEl.rows = 14;
+    promptArea.inputEl.addClass("url-to-vault-prompt-area");
   }
 }
