@@ -32,8 +32,12 @@ Import any readable web article into your vault, run it through OpenAI's Respons
 - **Model**: OpenAI model name used for formatting (default `gpt-5-mini`).  
 - **Output folder**: relative path inside your vault; created if missing.  
 - **Default tags**: comma-separated tags injected into the YAML `tags` list.  
+- **Append hyperlinks**: add a list of extracted links to the saved note.  
+- **Append images**: add a list of hotlinked images to the saved note.  
 - **Trim article text at**: character limit sent to OpenAI to avoid large prompts (default 12,000).  
-- **Open created note**: open the note after it is written to disk.
+- **Open created note**: open the note after it is written to disk.  
+- **Max OpenAI retries**: how many times to retry on transient OpenAI errors (rate limits/5xx).  
+- **Verbose logging**: print extra debug info to the console (never includes your API key).  
 - **Prompt (advanced)**: toggle to use a custom prompt. You can insert the built-in prompt into the text box to edit a copy, clear to start fresh, and revert to the shipped prompt at any time.
 
 ## Notes and safety

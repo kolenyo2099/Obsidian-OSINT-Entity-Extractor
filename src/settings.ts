@@ -87,6 +87,32 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Max OpenAI retries")
+      .setDesc("Retries on transient OpenAI errors (rate limits, 5xx).")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 3, 1)
+          .setValue(this.plugin.settings.maxRetries)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.maxRetries = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Verbose logging")
+      .setDesc("Log extra details to the console for troubleshooting (no API keys).")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.verboseLogging)
+          .onChange(async (value) => {
+            this.plugin.settings.verboseLogging = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Open created note")
       .setDesc("Open the note after creation.")
       .addToggle((toggle) =>
@@ -94,6 +120,32 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.openAfterCreate)
           .onChange(async (value) => {
             this.plugin.settings.openAfterCreate = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    containerEl.createEl("h3", { text: "Content options" });
+
+    new Setting(containerEl)
+      .setName("Append hyperlinks")
+      .setDesc("Include a list of extracted links at the end of the note.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeLinks)
+          .onChange(async (value) => {
+            this.plugin.settings.includeLinks = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Append images")
+      .setDesc("Include a list of image embeds (hotlinked) at the end of the note.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeImages)
+          .onChange(async (value) => {
+            this.plugin.settings.includeImages = value;
             this.saveSettingsDebounced();
           })
       );
@@ -112,9 +164,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           })
       );
 
-    let promptArea: TextAreaComponent | null = null;
-
-    const promptSetting = new Setting(containerEl)
+    new Setting(containerEl)
       .setName("Custom prompt")
       .setDesc(
         "Leave blank to keep using the built-in prompt. Insert the default to edit a copy, or clear to start fresh."
@@ -148,23 +198,31 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
             if (!confirmed) return;
             this.plugin.settings.useCustomPrompt = false;
             this.plugin.settings.customPrompt = "";
-            if (promptArea) promptArea.setValue("");
             this.saveSettingsDebounced();
             // Also refresh the toggle state visually
             this.display();
           })
       );
 
-    promptArea = promptSetting.addTextArea((text) =>
-      text
-        .setPlaceholder("Custom prompt (optional)")
-        .setValue(this.plugin.settings.customPrompt)
-        .onChange(async (value) => {
-          this.plugin.settings.customPrompt = value;
-          this.saveSettingsDebounced();
-        })
-    );
-    promptArea.inputEl.rows = 14;
-    promptArea.inputEl.addClass("url-to-vault-prompt-area");
+    let promptArea: TextAreaComponent | null = null;
+    new Setting(containerEl)
+      .setName("Prompt text")
+      .setDesc("Only used when 'Use custom prompt' is ON.")
+      .addTextArea((text) => {
+        promptArea = text;
+        text
+          .setPlaceholder("Custom prompt (optional)")
+          .setValue(this.plugin.settings.customPrompt)
+          .onChange(async (value) => {
+            this.plugin.settings.customPrompt = value;
+            this.saveSettingsDebounced();
+          });
+      });
+
+    // Adjust rows and class if the textarea exists
+    if (promptArea) {
+      promptArea.inputEl.rows = 14;
+      promptArea.inputEl.addClass("url-to-vault-prompt-area");
+    }
   }
 }

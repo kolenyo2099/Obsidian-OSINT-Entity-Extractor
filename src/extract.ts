@@ -40,9 +40,33 @@ function extractPublished(doc: Document): string {
 function extractAuthors(byline?: string | null): string[] {
   if (!byline) return [];
   return byline
-    .split(/,| and /i)
+    .split(/,\s*|\s+and\s+|\s*&\s*|;\s*/i)
     .map((a) => a.trim())
     .filter(Boolean);
+}
+
+function extractLinksAndImages(articleHtml: string, baseUrl: string) {
+  const tempDom = new JSDOM(articleHtml || "<div></div>", { url: baseUrl });
+  try {
+    const doc = tempDom.window.document;
+    const links = Array.from(doc.querySelectorAll("a"))
+      .map((a) => ({
+        text: a.textContent?.trim() ?? "",
+        href: a.href
+      }))
+      .filter((l) => !!l.href);
+
+    const images = Array.from(doc.querySelectorAll("img"))
+      .map((img) => ({
+        alt: img.getAttribute("alt")?.trim() ?? "",
+        src: img.src
+      }))
+      .filter((i) => !!i.src);
+
+    return { links, images };
+  } finally {
+    tempDom.window.close();
+  }
 }
 
 export async function fetchAndExtract(url: string, maxChars: number): Promise<ExtractedArticle> {
@@ -70,6 +94,8 @@ export async function fetchAndExtract(url: string, maxChars: number): Promise<Ex
       dom.window.document.body?.textContent?.trim() ||
       "";
 
+    const { links, images } = extractLinksAndImages(article?.content || "", url);
+
     const published = extractPublished(dom.window.document);
     const authors = extractAuthors(article?.byline);
     const sourceGuess = guessSource(url);
@@ -79,7 +105,9 @@ export async function fetchAndExtract(url: string, maxChars: number): Promise<Ex
       authors,
       published,
       text: trimText(text, maxChars),
-      sourceGuess
+      sourceGuess,
+      links,
+      images
     };
   } finally {
     dom.window.close();

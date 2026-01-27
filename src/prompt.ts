@@ -82,6 +82,4 @@ authors: {authors}
 published: {published}
 source: {source}
 
-ARTICLE TEXT
-{article_text}
 `.trim();

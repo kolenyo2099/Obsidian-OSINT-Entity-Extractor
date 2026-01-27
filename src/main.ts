@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, PluginSettings } from "./types";
 import { fetchAndExtract } from "./extract";
 import { formatWithOpenAI } from "./openai";
 import { ensureFrontmatterPresent, saveNoteToVault } from "./note";
+import type { ExtractedArticle } from "./types";
 
 const SECRET_KEY_ID = "url-to-vault-openai-key";
 
@@ -57,6 +58,12 @@ export default class UrlToVaultPlugin extends Plugin {
 
   constructor(app: App, manifest: PluginManifest) {
     super(app, manifest);
+  }
+
+  private logVerbose(...args: unknown[]) {
+    if (this.settings.verboseLogging) {
+      console.log("[URL-to-Vault]", ...args);
+    }
   }
 
   async onload() {
@@ -134,13 +141,16 @@ export default class UrlToVaultPlugin extends Plugin {
       return;
     }
 
-    const progress = new Notice("Importing article...", 0);
+    const progress = new Notice("Fetching article...", 0);
 
     try {
       const meta = await fetchAndExtract(url, this.settings.maxChars);
+      this.logVerbose("Fetched metadata", meta);
       if (!meta.text) {
         new Notice("No article text extracted; sending minimal content to OpenAI.", 6000);
       }
+
+      progress.setMessage("Formatting with OpenAI...");
 
       const promptTemplate =
         this.settings.useCustomPrompt && this.settings.customPrompt.trim()
@@ -150,18 +160,33 @@ export default class UrlToVaultPlugin extends Plugin {
         new Notice("Custom prompt is empty; using default prompt instead.", 5000);
       }
 
-      const note = await formatWithOpenAI(
-        apiKey,
-        this.settings.model,
-        url,
-        meta,
-        this.settings.defaultTags,
-        promptTemplate
-      );
+      const note = await this.callOpenAIWithRetries(apiKey, url, meta, promptTemplate);
       const validated = ensureFrontmatterPresent(note);
+      const parts: string[] = [];
+      parts.push(validated);
       const rawHeader = "## Extracted article (plaintext)";
       const rawBody = meta.text?.trim() ? meta.text.trim() : "_No article text extracted._";
-      const finalNote = `${validated}\n\n${rawHeader}\n\n${rawBody}`;
+      parts.push("", rawHeader, "", rawBody);
+
+      if (this.settings.includeLinks && meta.links.length) {
+        parts.push("", "## Extracted links");
+        const linkLines = meta.links.map((l) => {
+          const text = l.text || l.href;
+          return `- [${text}](${l.href})`;
+        });
+        parts.push(...linkLines);
+      }
+
+      if (this.settings.includeImages && meta.images.length) {
+        parts.push("", "## Extracted images");
+        const imageLines = meta.images.map((img) => {
+          const alt = img.alt || "image";
+          return `- ![${alt}](${img.src})`;
+        });
+        parts.push(...imageLines);
+      }
+
+      const finalNote = parts.join("\n");
 
       const file = await saveNoteToVault(
         this.app.vault,
@@ -182,5 +207,56 @@ export default class UrlToVaultPlugin extends Plugin {
     } finally {
       progress.hide();
     }
+  }
+
+  private async callOpenAIWithRetries(
+    apiKey: string,
+    url: string,
+    meta: ExtractedArticle,
+    promptTemplate?: string
+  ): Promise<string> {
+    const maxRetries = this.settings.maxRetries ?? 0;
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt <= maxRetries) {
+      try {
+        return await formatWithOpenAI(
+          apiKey,
+          this.settings.model,
+          url,
+          meta,
+          this.settings.defaultTags,
+          promptTemplate
+        );
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.status ?? err?.response?.status;
+        const code = err?.code ?? err?.response?.data?.error?.code;
+        const msg: string = err?.message || String(err);
+        this.logVerbose("OpenAI error", { attempt, status, code, msg });
+
+        // Non-retriable: bad key or quota
+        if (status === 401) {
+          throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
+        }
+        if (code === "insufficient_quota") {
+          throw new Error("OpenAI quota exhausted. Check billing/usage.");
+        }
+
+        // Retriable: 429 (rate limit), 5xx
+        const retriable = status === 429 || (status && status >= 500);
+        if (!retriable || attempt === maxRetries) {
+          break;
+        }
+
+        // Backoff: 0.5s, 2s, 4s...
+        const delayMs = 500 * Math.pow(2, attempt);
+        await new Promise((res) => setTimeout(res, delayMs));
+        attempt += 1;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 }
