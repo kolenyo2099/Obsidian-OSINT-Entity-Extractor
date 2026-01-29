@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginManifest, Setting } from "obsidian";
+﻿import { App, Modal, Notice, Plugin, PluginManifest, Setting } from "obsidian";
 import { UrlToVaultSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginSettings } from "./types";
 import { fetchAndExtract } from "./extract";
@@ -17,7 +17,8 @@ function ensureHttpScheme(url: string): string {
 }
 
 function renderTwoStepProgress(step: 1 | 2, label: string): string {
-  const bar = step === 1 ? "▰▱" : "▰▰";
+  // ASCII-safe progress indicator to avoid mojibake on some platforms.
+  const bar = step === 1 ? "[# ]" : "[##]";
   return `Progress ${bar} (${step}/2) ${label}`;
 }
 
@@ -101,7 +102,7 @@ export default class UrlToVaultPlugin extends Plugin {
 
   private logVerbose(...args: unknown[]) {
     if (this.settings.verboseLogging) {
-      console.log("[URL-to-Vault]", ...args);
+      console.log("[OSINT-Entity-Extractor]", ...args);
     }
   }
 
@@ -320,3 +321,5 @@ export default class UrlToVaultPlugin extends Plugin {
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 }
+
+
