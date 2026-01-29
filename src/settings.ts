@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, debounce, TextAreaComponent, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, debounce, TextAreaComponent, Notice, createFragment } from "obsidian";
 import type UrlToVaultPlugin from "./main";
 import { PROMPT_TEMPLATE } from "./prompt";
 import { normalizeTags } from "./tags";
@@ -17,6 +17,25 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "ObsidiaNER - OSINT entity extraction plugin" });
+
+    new Setting(containerEl)
+      .setName("Report a bug / view source")
+      .setDesc(
+        createFragment((frag) => {
+          frag.append("GitHub: ");
+          frag.createEl("a", {
+            href: "https://github.com/thomasjjj/ObsidiaNER",
+            text: "thomasjjj/ObsidiaNER",
+            attr: { target: "_blank", rel: "noopener" }
+          });
+        })
+      )
+      .addExtraButton((btn) =>
+        btn
+          .setIcon("bug")
+          .setTooltip("Open GitHub repository")
+          .onClick(() => window.open("https://github.com/thomasjjj/ObsidiaNER", "_blank"))
+      );
 
     new Setting(containerEl)
       .setName("OpenAI API key")
