@@ -1,5 +1,7 @@
 # OSINT Entity Extractor
 
+A tool for open source intelligence analysts to extract structured data from web articles.
+
 <img width="1911" height="697" alt="image" src="https://github.com/user-attachments/assets/fe2cbeeb-bd7d-4908-ba7f-c62cf5c5e33b" />
 
 Import a web article into your Obsidian vault and turn it into a clean note with:
@@ -40,7 +42,7 @@ You paste a URL -> it fetches the article text -> OpenAI formats it -> the note 
 
 > Tip: If an article is paywalled or heavily scripted, extraction may be thin. Enable **Append raw article** or paste content manually.
 
-> Verification required: AI-generated text can be inaccurate or misleading. Use this for rapid familiarisation and drafting—always verify important facts against the original article and other sources.
+> Verification required: AI-generated text can be inaccurate or misleading. Use this for rapid familiarisation and draftingï¿½always verify important facts against the original article and other sources.
 
 ## New to Obsidian? (2-minute orientation)
 
@@ -101,7 +103,7 @@ Where to find things in Obsidian:
 
 ### Option B: Manual install (no coding required)
 
-GitHub tip: On the Release page, scroll to **Assets**. Download `main.js` and `manifest.json` from Assets. Ignore "Source code (zip)" — Obsidian needs the individual files.
+GitHub tip: On the Release page, scroll to **Assets**. Download `main.js` and `manifest.json` from Assets. Ignore "Source code (zip)" ï¿½ Obsidian needs the individual files.
 
 | Step | What to do | Notes / common mistakes |
 |---:|---|---|
