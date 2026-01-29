@@ -14,6 +14,11 @@ You paste a URL -> it fetches the article text -> OpenAI formats it -> the note 
 
 <img width="1262" height="332" alt="image" src="https://github.com/user-attachments/assets/3549b649-40d7-49d6-8e32-5a88dc7cff4e" />
 
+> **Community plugins note:** This plugin is currently awaiting approval to appear in Obsidian’s Community Plugins browser.  
+> Until it’s listed there, please use the **Manual install (no coding required)** steps below.  
+> Once it’s approved, you’ll be able to install it directly via **Settings → Community plugins → Browse**.
+
+
 ## Contents
 - [Quick start](#quick-start-first-import)
 - [New to Obsidian?](#new-to-obsidian-2-minute-orientation)
