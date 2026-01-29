@@ -1,5 +1,8 @@
 # ObsidiaNER - OSINT entity extraction plugin 
 
+<img width="1918" height="1033" alt="image" src="https://github.com/user-attachments/assets/1fec1eca-5b08-4677-8aff-a942934805e1" />
+
+
 Import any readable web article into your vault, run it through OpenAI's Responses API for structured Markdown with YAML frontmatter, and save it as a clean Obsidian note. This tool is designed to streamline investigation and allows for quick ingest of articles to establish a clear foundation of information pertaining to a particular topic. The entity extraction allows identification of commonality between articles and ensures that key nodes are identified quickly. 
 
 Note: This tool relies on Open AI API and uses LLM analysis. LLMs use a lot of power and water so please consider donating to:
