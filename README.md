@@ -56,26 +56,28 @@ It currently uses the OpenAI API; however, I intend to continue developing it to
 2) Build the plugin: `npm run build` (outputs `main.js` and `main.js.map` at the repo root and copies `manifest.json`).  
 3) Create a folder in your vault: `<vault>/.obsidian/plugins/ObsidiaNER/`.  
 4) Copy `manifest.json`, `main.js`, and `main.js.map` into that folder (include `styles.css` if you add one).  
-5) Reload Obsidian's plugins list and enable **URL to Vault**.
+5) Reload Obsidian's plugins list and enable **ObsidiaNER - OSINT entity extraction plugin**.
 
 ## Usage
 <img width="561" height="149" alt="image" src="https://github.com/user-attachments/assets/b76d4a38-26c2-41de-9329-6cbe5a7d29bd" />
 
 - Command Palette: run **Import article from URL (OpenAI -> Obsidian note)**.  
 - Ribbon: click the link icon added by the plugin.  
-- Paste a URL; the plugin fetches the page, trims the extracted text to the configured max characters, sends it to OpenAI, then saves the resulting note to your chosen folder. The raw extracted text is appended under its own heading. A notice shows the saved path, and the note opens automatically if enabled.
+- Paste a URL (the dialog now has a **Paste** button and will auto-prepend `https://` if you omit the scheme). The plugin fetches the page, trims the extracted text to the configured max characters, sends it to OpenAI, then saves the resulting note to your chosen folder. The raw extracted text is appended under its own heading (toggle-able in settings). A notice shows the saved path, and the note opens automatically if enabled.
 
-## Settings (Settings -> URL to Vault)
+## Settings (Settings -> ObsidiaNER - OSINT entity extraction plugin)
 - **OpenAI API key**: stored in SecretStorage when available; otherwise saved with plugin data.  
 - **Model**: OpenAI model name used for formatting (default `gpt-5-mini`).  
 - **Output folder**: relative path inside your vault; created if missing.  
-- **Default tags**: comma-separated tags injected into the YAML `tags` list.  
+- **Default tags**: comma-separated tags injected into the YAML `tags` list (cleaned to lowercase slugs, `#` removed).  
 - **Append hyperlinks**: add a list of extracted links to the saved note.  
 - **Append images**: add a list of hotlinked images to the saved note.  
+- **Append raw article**: include the extracted plaintext article beneath the formatted note (on by default).  
 - **Trim article text at**: character limit sent to OpenAI to avoid large prompts (default 12,000).  
 - **Open created note**: open the note after it is written to disk.  
 - **Max OpenAI retries**: how many times to retry on transient OpenAI errors (rate limits/5xx).  
 - **Verbose logging**: print extra debug info to the console (never includes your API key).  
+- **Test OpenAI key**: lightweight check that the saved key can access OpenAI before running an import.  
 - **Prompt (advanced)**: toggle to use a custom prompt. You can insert the built-in prompt into the text box to edit a copy, clear to start fresh, and revert to the shipped prompt at any time.
 
 ## Notes and safety

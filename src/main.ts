@@ -2,11 +2,19 @@ import { App, Modal, Notice, Plugin, PluginManifest, Setting } from "obsidian";
 import { UrlToVaultSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginSettings } from "./types";
 import { fetchAndExtract } from "./extract";
-import { formatWithOpenAI } from "./openai";
+import { formatWithOpenAI, getOpenAIClient } from "./openai";
 import { ensureFrontmatterPresent, saveNoteToVault } from "./note";
 import type { ExtractedArticle } from "./types";
+import { normalizeTags } from "./tags";
 
 const SECRET_KEY_ID = "url-to-vault-openai-key";
+
+function ensureHttpScheme(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
 
 class UrlInputModal extends Modal {
   onSubmit: (url: string) => void;
@@ -22,20 +30,46 @@ class UrlInputModal extends Modal {
     contentEl.empty();
     contentEl.createEl("h2", { text: "Import article from URL" });
 
-    new Setting(contentEl)
-      .setName("Article URL")
-      .addText((text) => {
-        text.inputEl.placeholder = "https://example.com/article";
-        text.onChange((value) => (this.value = value.trim()));
-        text.inputEl.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            this.close();
-            this.onSubmit(this.value);
-          }
-        });
-        text.inputEl.focus();
+    const urlSetting = new Setting(contentEl).setName("Article URL");
+    urlSetting.addText((text) => {
+      text.inputEl.placeholder = "https://example.com/article";
+      text.onChange((value) => (this.value = value.trim()));
+      text.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.close();
+          this.onSubmit(this.value);
+        }
       });
+      text.inputEl.addEventListener("focus", () => text.inputEl.select());
+      text.inputEl.focus();
+    });
+    urlSetting.addButton((btn) =>
+      btn
+        .setButtonText("Paste")
+        .setTooltip("Paste URL from clipboard")
+        .onClick(async () => {
+          try {
+            const clip =
+              (await navigator.clipboard?.readText?.()) ||
+              (typeof require !== "undefined" ? require("electron")?.clipboard?.readText?.() : "");
+            if (!clip) {
+              new Notice("Clipboard is empty.");
+              return;
+            }
+            this.value = clip.trim();
+            const input = urlSetting.controlEl.querySelector("input");
+            if (input) {
+              input.value = this.value;
+              input.focus();
+              input.select();
+            }
+          } catch (err) {
+            console.warn("Clipboard read failed", err);
+            new Notice("Couldn't read clipboard in this context.");
+          }
+        })
+    );
 
     new Setting(contentEl).addButton((btn) =>
       btn
@@ -123,13 +157,35 @@ export default class UrlToVaultPlugin extends Plugin {
     await this.saveSettings();
   }
 
+  async testApiKey(): Promise<void> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) {
+      throw new Error("No API key saved.");
+    }
+    try {
+      const client = getOpenAIClient(apiKey);
+      const models = await client.models.list();
+      if (!models?.data?.length) {
+        throw new Error("Key valid but no models available to list.");
+      }
+      this.logVerbose("OpenAI key test succeeded", { modelsListed: models.data.length });
+    } catch (err: any) {
+      const status = err?.status ?? err?.response?.status;
+      if (status === 401) {
+        throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
+      }
+      throw err;
+    }
+  }
+
   async runImport(url: string) {
-    if (!url) {
+    const normalizedUrl = ensureHttpScheme(url);
+    if (!normalizedUrl) {
       new Notice("Please enter a URL.");
       return;
     }
     try {
-      new URL(url);
+      new URL(normalizedUrl);
     } catch {
       new Notice("Please enter a valid URL.");
       return;
@@ -144,7 +200,7 @@ export default class UrlToVaultPlugin extends Plugin {
     const progress = new Notice("Fetching article...", 0);
 
     try {
-      const meta = await fetchAndExtract(url, this.settings.maxChars);
+      const meta = await fetchAndExtract(normalizedUrl, this.settings.maxChars);
       this.logVerbose("Fetched metadata", meta);
       if (!meta.text) {
         new Notice("No article text extracted; sending minimal content to OpenAI.", 6000);
@@ -160,13 +216,17 @@ export default class UrlToVaultPlugin extends Plugin {
         new Notice("Custom prompt is empty; using default prompt instead.", 5000);
       }
 
-      const note = await this.callOpenAIWithRetries(apiKey, url, meta, promptTemplate);
+      const defaultTags = normalizeTags(this.settings.defaultTags);
+      const note = await this.callOpenAIWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
       const validated = ensureFrontmatterPresent(note);
       const parts: string[] = [];
       parts.push(validated);
-      const rawHeader = "## Extracted article (plaintext)";
-      const rawBody = meta.text?.trim() ? meta.text.trim() : "_No article text extracted._";
-      parts.push("", rawHeader, "", rawBody);
+
+      if (this.settings.includeRaw) {
+        const rawHeader = "## Extracted article (plaintext)";
+        const rawBody = meta.text?.trim() ? meta.text.trim() : "_No article text extracted._";
+        parts.push("", rawHeader, "", rawBody);
+      }
 
       if (this.settings.includeLinks && meta.links.length) {
         parts.push("", "## Extracted links");
@@ -213,7 +273,8 @@ export default class UrlToVaultPlugin extends Plugin {
     apiKey: string,
     url: string,
     meta: ExtractedArticle,
-    promptTemplate?: string
+    promptTemplate?: string,
+    defaultTags?: string[]
   ): Promise<string> {
     const maxRetries = this.settings.maxRetries ?? 0;
     let attempt = 0;
@@ -221,14 +282,7 @@ export default class UrlToVaultPlugin extends Plugin {
 
     while (attempt <= maxRetries) {
       try {
-        return await formatWithOpenAI(
-          apiKey,
-          this.settings.model,
-          url,
-          meta,
-          this.settings.defaultTags,
-          promptTemplate
-        );
+        return await formatWithOpenAI(apiKey, this.settings.model, url, meta, defaultTags, promptTemplate);
       } catch (err: any) {
         lastError = err;
         const status = err?.status ?? err?.response?.status;

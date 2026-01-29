@@ -5,7 +5,7 @@ import { PROMPT_TEMPLATE } from "./prompt";
 export function buildPrompt(
   url: string,
   meta: ExtractedArticle,
-  defaultTags?: string,
+  defaultTags?: string | string[],
   promptTemplate: string = PROMPT_TEMPLATE
 ): string {
   const extractionNote =
@@ -21,8 +21,18 @@ export function buildPrompt(
     .replace("{source}", meta.sourceGuess || "")
     .replace("{article_text}", (meta.text + extractionNote).trim());
 
-  if (defaultTags && defaultTags.trim()) {
-    return `${base}\n\nDEFAULT TAGS TO INCLUDE IN YAML (if appropriate): ${defaultTags.trim()}`;
+  const tagsArray = Array.isArray(defaultTags)
+    ? defaultTags
+    : defaultTags
+    ? defaultTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+
+  if (tagsArray.length) {
+    const tagsBlock = tagsArray.map((t) => `- ${t}`).join("\n");
+    return `${base}\n\nDEFAULT TAGS TO INCLUDE IN YAML (if appropriate):\n${tagsBlock}`;
   }
   return base;
 }
@@ -32,10 +42,10 @@ export async function formatWithOpenAI(
   model: string,
   url: string,
   meta: ExtractedArticle,
-  defaultTags?: string,
+  defaultTags?: string | string[],
   promptTemplate?: string
 ): Promise<string> {
-  const client = getClient(apiKey);
+  const client = getOpenAIClient(apiKey);
   const prompt = buildPrompt(url, meta, defaultTags, promptTemplate || PROMPT_TEMPLATE);
 
   const resp = await client.responses.create({
@@ -49,7 +59,7 @@ export async function formatWithOpenAI(
 
 let cachedClient: { key: string; client: OpenAI } | null = null;
 
-function getClient(apiKey: string): OpenAI {
+export function getOpenAIClient(apiKey: string): OpenAI {
   if (cachedClient?.key === apiKey) return cachedClient.client;
   const client = new OpenAI({
     apiKey,

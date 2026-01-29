@@ -14,6 +14,7 @@ export interface PluginSettings {
   defaultTags: string;
   openAfterCreate: boolean;
   maxChars: number;
+  includeRaw: boolean;
   useCustomPrompt: boolean;
   customPrompt: string;
   includeLinks: boolean;
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   defaultTags: "news",
   openAfterCreate: true,
   maxChars: 12000,
+  includeRaw: true,
   useCustomPrompt: false,
   customPrompt: "",
   includeLinks: false,

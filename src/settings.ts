@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting, debounce, TextAreaComponent } from "obsidian";
+import { App, PluginSettingTab, Setting, debounce, TextAreaComponent, Notice } from "obsidian";
 import type UrlToVaultPlugin from "./main";
 import { PROMPT_TEMPLATE } from "./prompt";
+import { normalizeTags } from "./tags";
 
 export class UrlToVaultSettingTab extends PluginSettingTab {
   plugin: UrlToVaultPlugin;
@@ -15,7 +16,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "URL to Vault" });
+    containerEl.createEl("h2", { text: "ObsidiaNER - OSINT entity extraction plugin" });
 
     new Setting(containerEl)
       .setName("OpenAI API key")
@@ -30,6 +31,27 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           await this.plugin.setApiKey(value.trim());
         });
       });
+
+    new Setting(containerEl)
+      .setName("Test OpenAI key")
+      .setDesc("Checks the saved key against OpenAI without sending article content.")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Test")
+          .setTooltip("Send a lightweight request to confirm the key works.")
+          .onClick(async () => {
+            btn.setDisabled(true).setButtonText("Testing...");
+            try {
+              await this.plugin.testApiKey();
+              new Notice("OpenAI key looks good.");
+            } catch (err: any) {
+              const msg = err?.message || "OpenAI key test failed.";
+              new Notice(msg, 6000);
+            } finally {
+              btn.setDisabled(false).setButtonText("Test");
+            }
+          })
+      );
 
     new Setting(containerEl)
       .setName("Model")
@@ -65,7 +87,12 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setPlaceholder("news,reading")
           .setValue(this.plugin.settings.defaultTags)
           .onChange(async (value) => {
-            this.plugin.settings.defaultTags = value.trim();
+            const tags = normalizeTags(value);
+            const sanitized = tags.join(", ");
+            this.plugin.settings.defaultTags = sanitized;
+            if (sanitized !== value.trim()) {
+              text.setValue(sanitized);
+            }
             this.saveSettingsDebounced();
           })
       );
@@ -79,12 +106,23 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setValue(String(this.plugin.settings.maxChars))
           .onChange(async (value) => {
             const parsed = Number(value);
-            if (!Number.isNaN(parsed) && parsed > 0) {
+            const valid = !Number.isNaN(parsed) && parsed > 500 && parsed <= 50000;
+            text.inputEl.classList.toggle("url-to-vault-invalid", !valid);
+            text.inputEl.style.borderColor = valid ? "" : "var(--text-error, #d9534f)";
+            if (valid) {
               this.plugin.settings.maxChars = parsed;
               this.saveSettingsDebounced();
             }
           })
       );
+    const maxCharsInput = containerEl.querySelector("input[placeholder='12000']");
+    if (maxCharsInput) {
+      maxCharsInput.setAttribute("type", "number");
+      maxCharsInput.setAttribute("min", "500");
+      maxCharsInput.setAttribute("max", "50000");
+      maxCharsInput.setAttribute("step", "500");
+      maxCharsInput.classList.add("url-to-vault-number");
+    }
 
     new Setting(containerEl)
       .setName("Max OpenAI retries")
@@ -125,6 +163,18 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       );
 
     containerEl.createEl("h3", { text: "Content options" });
+
+    new Setting(containerEl)
+      .setName("Append raw article")
+      .setDesc("Attach the extracted plaintext article below the AI-formatted note.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeRaw)
+          .onChange(async (value) => {
+            this.plugin.settings.includeRaw = value;
+            this.saveSettingsDebounced();
+          })
+      );
 
     new Setting(containerEl)
       .setName("Append hyperlinks")
