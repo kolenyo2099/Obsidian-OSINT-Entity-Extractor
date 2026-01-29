@@ -1,4 +1,4 @@
-import { normalizePath, Vault, TFile } from "obsidian";
+import { normalizePath, Vault, TFile, parseYaml } from "obsidian";
 
 export function sanitizeFilename(name: string, maxLen = 120): string {
   let safe = name.trim();
@@ -20,14 +20,13 @@ export function ensureFrontmatterPresent(note: string): string {
   }
   // Validate YAML parses to catch malformed frontmatter (bad indentation, scalars, etc.).
   try {
-    const { parseYaml } = require("obsidian") as typeof import("obsidian");
     const yamlBlock = note.slice(3, second).trim();
     const parsed = parseYaml(yamlBlock);
     if (parsed === null || typeof parsed !== "object") {
       throw new Error("Frontmatter YAML is not an object.");
     }
-  } catch (err: any) {
-    const msg = err?.message || "Invalid YAML frontmatter.";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Invalid YAML frontmatter.";
     throw new Error(`Invalid YAML frontmatter: ${msg}`);
   }
   return note;

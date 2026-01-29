@@ -54,26 +54,26 @@ class UrlInputModal extends Modal {
       btn
         .setButtonText("Paste")
         .setTooltip("Paste URL from clipboard")
-        .onClick(async () => {
-          try {
-            const clip =
-              (await navigator.clipboard?.readText?.()) ||
-              (typeof require !== "undefined" ? require("electron")?.clipboard?.readText?.() : "");
-            if (!clip) {
-              new Notice("Clipboard is empty.");
-              return;
+        .onClick(() => {
+          void (async () => {
+            try {
+              const clip = await navigator.clipboard?.readText?.();
+              if (!clip) {
+                new Notice("Clipboard is empty.");
+                return;
+              }
+              this.value = clip.trim();
+              const input = urlSetting.controlEl.querySelector("input");
+              if (input) {
+                input.value = this.value;
+                input.focus();
+                input.select();
+              }
+            } catch (err) {
+              console.warn("Clipboard read failed", err);
+              new Notice("Couldn't read clipboard in this context.");
             }
-            this.value = clip.trim();
-            const input = urlSetting.controlEl.querySelector("input");
-            if (input) {
-              input.value = this.value;
-              input.focus();
-              input.select();
-            }
-          } catch (err) {
-            console.warn("Clipboard read failed", err);
-            new Notice("Couldn't read clipboard in this context.");
-          }
+          })();
         })
     );
 
@@ -83,7 +83,7 @@ class UrlInputModal extends Modal {
         .setCta()
         .onClick(() => {
           this.close();
-          this.onSubmit(this.value);
+          void this.onSubmit(this.value);
         })
     );
   }
@@ -102,14 +102,14 @@ export default class UrlToVaultPlugin extends Plugin {
 
   private logVerbose(...args: unknown[]) {
     if (this.settings.verboseLogging) {
-      console.log("[OSINT-Entity-Extractor]", ...args);
+      console.debug("[OSINT-Entity-Extractor]", ...args);
     }
   }
 
   async onload() {
     await this.loadSettings();
 
-    const openImportModal = () => new UrlInputModal(this.app, (url) => this.runImport(url)).open();
+    const openImportModal = () => new UrlInputModal(this.app, (url) => void this.runImport(url)).open();
 
     this.addCommand({
       id: "import-article-from-url",
@@ -174,8 +174,9 @@ export default class UrlToVaultPlugin extends Plugin {
       const modelToCheck = this.settings.model || "gpt-5-mini";
       await client.models.retrieve(modelToCheck);
       this.logVerbose("OpenAI key test succeeded", { modelChecked: modelToCheck });
-    } catch (err: any) {
-      const status = err?.status ?? err?.response?.status;
+    } catch (err: unknown) {
+      const status =
+        (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
       }
@@ -289,11 +290,14 @@ export default class UrlToVaultPlugin extends Plugin {
     while (attempt <= maxRetries) {
       try {
         return await formatWithOpenAI(apiKey, this.settings.model, url, meta, defaultTags, promptTemplate);
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
-        const status = err?.status ?? err?.response?.status;
-        const code = err?.code ?? err?.response?.data?.error?.code;
-        const msg: string = err?.message || String(err);
+        const status =
+          (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
+        const code =
+          (err as { code?: string })?.code ??
+          (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+        const msg: string = err instanceof Error ? err.message : String(err);
         this.logVerbose("OpenAI error", { attempt, status, code, msg });
 
         // Non-retriable: bad key or quota

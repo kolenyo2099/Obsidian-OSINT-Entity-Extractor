@@ -1,7 +1,40 @@
-import { App, PluginSettingTab, Setting, debounce, TextAreaComponent, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, debounce, TextAreaComponent, Notice, Modal } from "obsidian";
 import type UrlToVaultPlugin from "./main";
 import { PROMPT_TEMPLATE } from "./prompt";
 import { normalizeTags } from "./tags";
+
+class ConfirmModal extends Modal {
+  constructor(app: App, private titleText: string, private bodyText: string, private onConfirm: () => void) {
+    super(app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.titleEl.setText(this.titleText);
+    contentEl.createEl("p", { text: this.bodyText });
+
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn.setButtonText("Cancel").onClick(() => {
+          this.close();
+        })
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Confirm")
+          .setCta()
+          .onClick(() => {
+            this.close();
+            this.onConfirm();
+          })
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
 
 export class UrlToVaultSettingTab extends PluginSettingTab {
   plugin: UrlToVaultPlugin;
@@ -17,7 +50,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     try {
-      containerEl.createEl("h2", { text: "OSINT Entity Extractor" });
+      new Setting(containerEl).setName("OSINT Entity Extractor").setHeading();
 
       const repoDesc = (() => {
         const frag = document.createDocumentFragment();
@@ -50,8 +83,8 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         this.plugin.getApiKey().then((key) => {
           if (key) text.setValue(key);
         });
-        text.onChange(async (value) => {
-          await this.plugin.setApiKey(value.trim());
+        text.onChange((value) => {
+          void this.plugin.setApiKey(value.trim());
         });
       });
 
@@ -62,17 +95,18 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         btn
           .setButtonText("Test")
           .setTooltip("Send a lightweight request to confirm the key works.")
-          .onClick(async () => {
+          .onClick(() => {
             btn.setDisabled(true).setButtonText("Testing...");
-            try {
-              await this.plugin.testApiKey();
-              new Notice("OpenAI key looks good.");
-            } catch (err: any) {
-              const msg = err?.message || "OpenAI key test failed.";
-              new Notice(msg, 6000);
-            } finally {
-              btn.setDisabled(false).setButtonText("Test");
-            }
+            void this.plugin
+              .testApiKey()
+              .then(() => new Notice("OpenAI key looks good."))
+              .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : "OpenAI key test failed.";
+                new Notice(msg, 6000);
+              })
+              .finally(() => {
+                btn.setDisabled(false).setButtonText("Test");
+              });
           })
       );
 
@@ -83,7 +117,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("gpt-5-mini")
           .setValue(this.plugin.settings.model)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.model = value.trim() || "gpt-5-mini";
             this.saveSettingsDebounced();
           })
@@ -96,7 +130,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("articles")
           .setValue(this.plugin.settings.outputFolder)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.outputFolder = value.trim();
             this.saveSettingsDebounced();
           })
@@ -109,7 +143,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("news,reading")
           .setValue(this.plugin.settings.defaultTags)
-          .onChange(async (value) => {
+          .onChange((value) => {
             const tags = normalizeTags(value);
             const sanitized = tags.join(", ");
             this.plugin.settings.defaultTags = sanitized;
@@ -127,7 +161,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("12000")
           .setValue(String(this.plugin.settings.maxChars))
-          .onChange(async (value) => {
+          .onChange((value) => {
             const parsed = Number(value);
             const valid = !Number.isNaN(parsed) && parsed > 500 && parsed <= 50000;
             text.inputEl.classList.toggle("osint-ner-invalid", !valid);
@@ -155,7 +189,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setLimits(0, 3, 1)
           .setValue(this.plugin.settings.maxRetries)
           .setDynamicTooltip()
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.maxRetries = value;
             this.saveSettingsDebounced();
           })
@@ -167,7 +201,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.verboseLogging)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.verboseLogging = value;
             this.saveSettingsDebounced();
           })
@@ -179,13 +213,13 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.openAfterCreate)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.openAfterCreate = value;
             this.saveSettingsDebounced();
           })
       );
 
-    containerEl.createEl("h3", { text: "Content options" });
+    new Setting(containerEl).setName("Content options").setHeading();
 
     new Setting(containerEl)
       .setName("Append raw article")
@@ -193,7 +227,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeRaw)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.includeRaw = value;
             this.saveSettingsDebounced();
           })
@@ -205,7 +239,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeLinks)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.includeLinks = value;
             this.saveSettingsDebounced();
           })
@@ -217,13 +251,13 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeImages)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.includeImages = value;
             this.saveSettingsDebounced();
           })
       );
 
-    containerEl.createEl("h3", { text: "Prompt (advanced)" });
+    new Setting(containerEl).setName("Prompt (advanced)").setHeading();
 
     new Setting(containerEl)
       .setName("Use custom prompt")
@@ -231,7 +265,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.useCustomPrompt)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.useCustomPrompt = value;
             this.saveSettingsDebounced();
           })
@@ -267,13 +301,17 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setButtonText("Revert to default")
           .setTooltip("Stop using a custom prompt and discard it.")
           .onClick(() => {
-            const confirmed = window.confirm("Revert to the built-in prompt and discard the custom one?");
-            if (!confirmed) return;
-            this.plugin.settings.useCustomPrompt = false;
-            this.plugin.settings.customPrompt = "";
-            this.saveSettingsDebounced();
-            // Also refresh the toggle state visually
-            this.display();
+            new ConfirmModal(
+              this.app,
+              "Revert to default prompt",
+              "Discard the custom prompt and use the built-in prompt?",
+              () => {
+                this.plugin.settings.useCustomPrompt = false;
+                this.plugin.settings.customPrompt = "";
+                this.saveSettingsDebounced();
+                this.display();
+              }
+            ).open();
           })
       );
 
@@ -286,7 +324,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("Custom prompt (optional)")
           .setValue(this.plugin.settings.customPrompt)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.plugin.settings.customPrompt = value;
             this.saveSettingsDebounced();
           });
