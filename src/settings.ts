@@ -16,26 +16,27 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "OSINT Entity Extractor" });
+    try {
+      containerEl.createEl("h2", { text: "OSINT Entity Extractor" });
 
-    new Setting(containerEl)
-      .setName("Report a bug / view source")
-      .setDesc(
-        createFragment((frag) => {
-          frag.append("GitHub: ");
-          frag.createEl("a", {
-            href: "https://github.com/thomasjjj/ObsidiaNER",
-            text: "thomasjjj/ObsidiaNER (issues)",
-            attr: { target: "_blank", rel: "noopener" }
-          });
-        })
-      )
-      .addExtraButton((btn) =>
-        btn
-          .setIcon("bug")
-          .setTooltip("Open GitHub repository")
-          .onClick(() => window.open("https://github.com/thomasjjj/ObsidiaNER", "_blank"))
-      );
+      new Setting(containerEl)
+        .setName("Report a bug / view source")
+        .setDesc(
+          createFragment((frag) => {
+            frag.append("GitHub: ");
+            frag.createEl("a", {
+              href: "https://github.com/thomasjjj/ObsidiaNER",
+              text: "thomasjjj/ObsidiaNER (issues)",
+              attr: { target: "_blank", rel: "noopener" }
+            });
+          })
+        )
+        .addExtraButton((btn) =>
+          btn
+            .setIcon("bug")
+            .setTooltip("Open GitHub repository")
+            .onClick(() => window.open("https://github.com/thomasjjj/ObsidiaNER", "_blank"))
+        );
 
     new Setting(containerEl)
       .setName("OpenAI API key")
@@ -292,6 +293,12 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     if (promptArea) {
       promptArea.inputEl.rows = 14;
       promptArea.inputEl.addClass("osint-ner-prompt-area");
+    }
+    } catch (err) {
+      console.error("Failed to render OSINT Entity Extractor settings", err);
+      containerEl.createEl("p", {
+        text: "Settings failed to load. See console for details."
+      });
     }
   }
 }
