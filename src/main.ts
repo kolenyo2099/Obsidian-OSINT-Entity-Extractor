@@ -57,7 +57,12 @@ class UrlInputModal extends Modal {
         .onClick(() => {
           void (async () => {
             try {
-              const clip = await navigator.clipboard?.readText?.();
+              const readText = navigator.clipboard?.readText;
+              if (!readText) {
+                new Notice("Clipboard unavailable in this context.");
+                return;
+              }
+              const clip = await readText.call(navigator.clipboard);
               if (!clip) {
                 new Notice("Clipboard is empty.");
                 return;
