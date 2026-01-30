@@ -80,7 +80,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       .addText((text) => {
         text.inputEl.type = "password";
         text.inputEl.placeholder = "sk-...";
-        this.plugin.getApiKey().then((key) => {
+        void this.plugin.getApiKey().then((key) => {
           if (key) text.setValue(key);
         });
         text.onChange((value) => {
