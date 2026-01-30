@@ -50,7 +50,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     try {
-      new Setting(containerEl).setName("OSINT Entity Extractor").setHeading();
+      new Setting(containerEl).setName("About this plugin").setHeading();
 
       const repoDesc = (() => {
         const frag = document.createDocumentFragment();
@@ -96,7 +96,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           .setButtonText("Test")
           .setTooltip("Send a lightweight request to confirm the key works.")
           .onClick(() => {
-            btn.setDisabled(true).setButtonText("Testing...");
+            btn.setDisabled(true).setButtonText("Testing key...");
             void this.plugin
               .testApiKey()
               .then(() => new Notice("OpenAI key looks good."))
