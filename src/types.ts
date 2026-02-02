@@ -9,7 +9,9 @@ export interface ExtractedArticle {
 }
 
 export interface PluginSettings {
+  provider: "openai" | "lmstudio";
   model: string;
+  apiBaseUrl: string;
   outputFolder: string;
   defaultTags: string;
   openAfterCreate: boolean;
@@ -25,7 +27,9 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+  provider: "openai",
   model: "gpt-5-mini",
+  apiBaseUrl: "http://localhost:1234/v1",
   outputFolder: "articles",
   defaultTags: "news",
   openAfterCreate: true,

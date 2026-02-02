@@ -2,7 +2,7 @@
 import { UrlToVaultSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, PluginSettings } from "./types";
 import { fetchAndExtract } from "./extract";
-import { formatWithOpenAI, getOpenAIClient } from "./openai";
+import { formatWithModel, getOpenAIClient } from "./openai";
 import { ensureFrontmatterPresent, saveNoteToVault } from "./note";
 import type { ExtractedArticle } from "./types";
 import { normalizeTags } from "./tags";
@@ -170,11 +170,16 @@ export default class UrlToVaultPlugin extends Plugin {
 
   async testApiKey(): Promise<void> {
     const apiKey = await this.getApiKey();
-    if (!apiKey) {
+    if (this.settings.provider === "openai" && !apiKey) {
       throw new Error("No API key saved.");
     }
     try {
-      const client = getOpenAIClient(apiKey);
+      const client = getOpenAIClient(this.getApiKeyForProvider(apiKey), this.getApiBaseUrl());
+      if (this.settings.provider === "lmstudio") {
+        await client.models.list();
+        this.logVerbose("LM Studio connection test succeeded", { baseUrl: this.getApiBaseUrl() });
+        return;
+      }
       // Prefer a lightweight retrieve to avoid model-listing permission issues.
       const modelToCheck = this.settings.model || "gpt-5-mini";
       await client.models.retrieve(modelToCheck);
@@ -187,6 +192,20 @@ export default class UrlToVaultPlugin extends Plugin {
       }
       throw err;
     }
+  }
+
+  private getApiKeyForProvider(apiKey: string): string {
+    if (this.settings.provider === "lmstudio") {
+      return apiKey || "lm-studio";
+    }
+    return apiKey;
+  }
+
+  private getApiBaseUrl(): string | undefined {
+    if (this.settings.provider === "lmstudio") {
+      return this.settings.apiBaseUrl?.trim() || "http://localhost:1234/v1";
+    }
+    return undefined;
   }
 
   async runImport(url: string) {
@@ -203,7 +222,7 @@ export default class UrlToVaultPlugin extends Plugin {
     }
 
     const apiKey = await this.getApiKey();
-    if (!apiKey) {
+    if (this.settings.provider === "openai" && !apiKey) {
       new Notice("Set your OpenAI API key in the plugin settings first.", 6000);
       return;
     }
@@ -217,7 +236,8 @@ export default class UrlToVaultPlugin extends Plugin {
         new Notice("No article text extracted; sending minimal content to OpenAI.", 6000);
       }
 
-      progress.setMessage(renderTwoStepProgress(2, "Formatting with OpenAI..."));
+      const providerLabel = this.settings.provider === "lmstudio" ? "LM Studio" : "OpenAI";
+      progress.setMessage(renderTwoStepProgress(2, `Formatting with ${providerLabel}...`));
 
       const promptTemplate =
         this.settings.useCustomPrompt && this.settings.customPrompt.trim()
@@ -228,7 +248,7 @@ export default class UrlToVaultPlugin extends Plugin {
       }
 
       const defaultTags = normalizeTags(this.settings.defaultTags);
-      const note = await this.callOpenAIWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
+      const note = await this.callModelWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
       const validated = ensureFrontmatterPresent(note);
       const parts: string[] = [];
       parts.push(validated);
@@ -281,7 +301,7 @@ export default class UrlToVaultPlugin extends Plugin {
     }
   }
 
-  private async callOpenAIWithRetries(
+  private async callModelWithRetries(
     apiKey: string,
     url: string,
     meta: ExtractedArticle,
@@ -291,10 +311,21 @@ export default class UrlToVaultPlugin extends Plugin {
     const maxRetries = this.settings.maxRetries ?? 0;
     let attempt = 0;
     let lastError: unknown;
+    const provider = this.settings.provider;
+    const providerLabel = provider === "lmstudio" ? "LM Studio" : "OpenAI";
 
     while (attempt <= maxRetries) {
       try {
-        return await formatWithOpenAI(apiKey, this.settings.model, url, meta, defaultTags, promptTemplate);
+        return await formatWithModel(
+          this.getApiKeyForProvider(apiKey),
+          this.settings.model,
+          url,
+          meta,
+          defaultTags,
+          promptTemplate,
+          provider,
+          this.getApiBaseUrl()
+        );
       } catch (err: unknown) {
         lastError = err;
         const status =
@@ -303,13 +334,13 @@ export default class UrlToVaultPlugin extends Plugin {
           (err as { code?: string })?.code ??
           (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
         const msg: string = err instanceof Error ? err.message : String(err);
-        this.logVerbose("OpenAI error", { attempt, status, code, msg });
+        this.logVerbose(`${providerLabel} error`, { attempt, status, code, msg });
 
         // Non-retriable: bad key or quota
-        if (status === 401) {
+        if (status === 401 && provider === "openai") {
           throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
         }
-        if (code === "insufficient_quota") {
+        if (code === "insufficient_quota" && provider === "openai") {
           throw new Error("OpenAI quota exhausted. Check billing/usage.");
         }
 
@@ -329,5 +360,4 @@ export default class UrlToVaultPlugin extends Plugin {
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 }
-
 

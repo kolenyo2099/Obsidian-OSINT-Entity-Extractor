@@ -77,8 +77,36 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
         );
 
     new Setting(containerEl)
-      .setName("OpenAI API key")
-      .setDesc("Stored via Obsidian SecretStorage when available; otherwise saved in plugin data.")
+      .setName("Provider")
+      .setDesc("Choose OpenAI or a local OpenAI-compatible server like LM Studio.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("openai", "OpenAI")
+          .addOption("lmstudio", "Local (LM Studio)")
+          .setValue(this.plugin.settings.provider)
+          .onChange((value) => {
+            this.plugin.settings.provider = value as "openai" | "lmstudio";
+            this.saveSettingsDebounced();
+            this.display();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("OpenAI-compatible base URL")
+      .setDesc("Used for LM Studio/local servers. Example: http://localhost:1234/v1")
+      .addText((text) =>
+        text
+          .setPlaceholder("http://localhost:1234/v1")
+          .setValue(this.plugin.settings.apiBaseUrl)
+          .onChange((value) => {
+            this.plugin.settings.apiBaseUrl = value.trim();
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("API key")
+      .setDesc("Required for OpenAI. Optional for LM Studio; stored in SecretStorage when available.")
       .addText((text) => {
         text.inputEl.type = "password";
         text.inputEl.placeholder = "sk-...";
@@ -91,19 +119,19 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Test OpenAI key")
-      .setDesc("Checks the saved key against OpenAI without sending article content.")
+      .setName("Test connection")
+      .setDesc("Checks the selected provider without sending article content.")
       .addButton((btn) =>
         btn
           .setButtonText("Test")
-          .setTooltip("Send a lightweight request to confirm the key works.")
+          .setTooltip("Send a lightweight request to confirm the connection works.")
           .onClick(() => {
-            btn.setDisabled(true).setButtonText("Testing key...");
+            btn.setDisabled(true).setButtonText("Testing connection...");
             void this.plugin
               .testApiKey()
-              .then(() => new Notice("OpenAI key looks good."))
+              .then(() => new Notice("Connection looks good."))
               .catch((err: unknown) => {
-                const msg = err instanceof Error ? err.message : "OpenAI key test failed.";
+                const msg = err instanceof Error ? err.message : "Connection test failed.";
                 new Notice(msg, 6000);
               })
               .finally(() => {
@@ -114,7 +142,7 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Model")
-      .setDesc("OpenAI model used for formatting (Responses API).")
+      .setDesc("OpenAI model or local model name used for formatting.")
       .addText((text) =>
         text
           .setPlaceholder("gpt-5-mini")
@@ -184,8 +212,8 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName("Max OpenAI retries")
-      .setDesc("Retries on transient OpenAI errors (rate limits, 5xx).")
+      .setName("Max request retries")
+      .setDesc("Retries on transient model errors (rate limits, 5xx).")
       .addSlider((slider) =>
         slider
           .setLimits(0, 3, 1)
