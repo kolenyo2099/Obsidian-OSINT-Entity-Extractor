@@ -21,7 +21,7 @@ const context = await esbuild.context({
   bundle: true,
   format: "cjs",
   platform: "node",
-  target: "es2020",
+  target: "es2018",
   external: ["obsidian"],
   outfile: path.join(outdir, "main.js"),
   sourcemap: true,

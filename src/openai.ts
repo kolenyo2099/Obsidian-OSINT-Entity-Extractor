@@ -34,16 +34,27 @@ export function buildPrompt(
   return base;
 }
 
-export async function formatWithOpenAI(
+export async function formatWithModel(
   apiKey: string,
   model: string,
   url: string,
   meta: ExtractedArticle,
   defaultTags?: string | string[],
-  promptTemplate?: string
+  promptTemplate?: string,
+  provider: "openai" | "lmstudio" = "openai",
+  apiBaseUrl?: string
 ): Promise<string> {
-  const client = getOpenAIClient(apiKey);
+  const client = getOpenAIClient(apiKey, apiBaseUrl);
   const prompt = buildPrompt(url, meta, defaultTags, promptTemplate || PROMPT_TEMPLATE);
+
+  if (provider === "lmstudio") {
+    const resp = await client.chat.completions.create({
+      model,
+      messages: [{ role: "user", content: prompt }]
+    });
+    const output = resp.choices?.[0]?.message?.content ?? "";
+    return output.trim();
+  }
 
   const resp = await client.responses.create({
     model,
@@ -54,15 +65,16 @@ export async function formatWithOpenAI(
   return output.trim();
 }
 
-let cachedClient: { key: string; client: OpenAI } | null = null;
+let cachedClient: { key: string; baseUrl?: string; client: OpenAI } | null = null;
 
-export function getOpenAIClient(apiKey: string): OpenAI {
-  if (cachedClient?.key === apiKey) return cachedClient.client;
+export function getOpenAIClient(apiKey: string, baseUrl?: string): OpenAI {
+  if (cachedClient?.key === apiKey && cachedClient.baseUrl === baseUrl) return cachedClient.client;
   const client = new OpenAI({
     apiKey,
+    baseURL: baseUrl || undefined,
     // Obsidian plugins run in an Electron renderer; allow browser usage explicitly.
     ...(typeof window !== "undefined" ? { dangerouslyAllowBrowser: true } : {})
   });
-  cachedClient = { key: apiKey, client };
+  cachedClient = { key: apiKey, baseUrl, client };
   return client;
 }

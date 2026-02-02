@@ -10,7 +10,7 @@ Import a web article into your Obsidian vault and turn it into a clean note with
 - Headings and structured summary
 - Linked named entities like [[People]], [[Orgs]], [[Places]]
 
-You paste a URL -> it fetches the article text -> OpenAI formats it -> the note is saved into your vault.
+You paste a URL -> it fetches the article text -> OpenAI (or a local LM Studio model) formats it -> the note is saved into your vault.
 
 <img width="1262" height="332" alt="image" src="https://github.com/user-attachments/assets/3549b649-40d7-49d6-8e32-5a88dc7cff4e" />
 
@@ -80,7 +80,7 @@ Where to find things in Obsidian:
 ## What it does
 - Prompts you for a URL (command palette or ribbon button), fetches the page, and extracts article text with Mozilla Readability.
 - Builds a strict prompt that enforces YAML frontmatter, required headings, and entity [[wikilinks]] in the body.
-- Calls OpenAI (default model: `gpt-5-mini`) via the Responses API, then validates that the model returned well-formed frontmatter.
+- Calls OpenAI (default model: `gpt-5-mini`) via the Responses API or a local LM Studio model via the OpenAI-compatible API, then validates that the model returned well-formed frontmatter.
 - Saves the note into your chosen folder, ensures a safe filename, and auto-opens it if you want.
 - Appends the raw extracted article text below the AI-formatted note so you always have the original content.
 - Stores your API key via Obsidian SecretStorage when available; otherwise it falls back to plugin data.
@@ -91,7 +91,7 @@ Where to find things in Obsidian:
 
 ## Requirements
 - Obsidian 1.5.0 or newer.
-- An OpenAI API key with access to the Responses API.
+- **Either** an OpenAI API key with access to the Responses API **or** a local model exposed via LM Studio’s OpenAI-compatible server.
 - Node.js 18+ and npm only if you want to build from source.
 
 ## Installation
@@ -130,7 +130,7 @@ If you cannot see the `.obsidian` folder, enable hidden files (Windows: View -> 
 
 > Important: This plugin needs an OpenAI API key (not your ChatGPT login).
 
-If you do not add a key, the plugin can fetch/extract article text, but it cannot generate the formatted note with entity links.
+If you do not add a key, the plugin can fetch/extract article text, but it cannot generate the formatted note with entity links. If you use LM Studio instead, you can skip the key and point the plugin at your local server.
 
 | Step | What to do | What to look for |
 |---:|---|---|
@@ -145,6 +145,18 @@ Troubleshooting:
 - Rate limit errors -> try again or lower the max article length in settings.
 - Key leaked -> revoke it in OpenAI and create a new one.
 
+## Using LM Studio (local models)
+
+If you want to run entirely local/open models:
+
+1. Open LM Studio and load your model.
+2. Enable the **OpenAI-compatible server** in LM Studio (it should start on `http://localhost:1234` by default).
+3. In Obsidian → Settings → OSINT Entity Extractor:
+   - Set **Provider** to **Local (LM Studio)**.
+   - Set **OpenAI-compatible base URL** to `http://localhost:1234/v1`.
+   - Set **Model** to the model ID shown in LM Studio (or leave your current model if LM Studio maps it automatically).
+4. Click **Test connection** to confirm it can reach your local server.
+
 ## Usage
 <img width="561" height="149" alt="image" src="https://github.com/user-attachments/assets/b76d4a38-26c2-41de-9329-6cbe5a7d29bd" />
 
@@ -153,8 +165,10 @@ Troubleshooting:
 - Paste a URL (Paste button available; scheme auto-prepends `https://` if missing). The plugin fetches the page, trims the extracted text to the configured max characters, sends it to OpenAI, then saves the resulting note to your chosen folder. The raw extracted text is appended under its own heading (toggle-able in settings). A notice shows the saved path, and the note opens automatically if enabled.
 
 ## Settings (Settings -> OSINT Entity Extractor)
-- **OpenAI API key**: stored in SecretStorage when available; otherwise saved with plugin data.
-- **Model**: OpenAI model name used for formatting (default `gpt-5-mini`).
+- **Provider**: choose OpenAI or a local LM Studio server.
+- **OpenAI-compatible base URL**: the local server URL for LM Studio (default `http://localhost:1234/v1`).
+- **API key**: required for OpenAI, optional for LM Studio (stored in SecretStorage when available).
+- **Model**: OpenAI model or local model name used for formatting (default `gpt-5-mini`).
 - **Output folder**: relative path inside your vault; created if missing.
 - **Default tags**: comma-separated tags injected into the YAML `tags` list (cleaned to lowercase slugs, `#` removed).
 - **Append hyperlinks**: add a list of extracted links to the saved note.
@@ -162,9 +176,9 @@ Troubleshooting:
 - **Append raw article**: include the extracted plaintext article beneath the formatted note (on by default).
 - **Trim article text at**: character limit sent to OpenAI to avoid large prompts (default 12,000).
 - **Open created note**: open the note after it is written to disk.
-- **Max OpenAI retries**: retries on transient OpenAI errors (rate limits/5xx).
+- **Max request retries**: retries on transient model errors (rate limits/5xx).
 - **Verbose logging**: log extra details to the console (never includes your API key).
-- **Test OpenAI key**: lightweight check that the saved key can access OpenAI before running an import.
+- **Test connection**: lightweight check that the selected provider is reachable before running an import.
 - **Prompt (advanced)**: toggle to use a custom prompt. You can insert the built-in prompt into the text box to edit a copy, clear to start fresh, and revert to the shipped prompt at any time.
 
 ## Common problems (fast fixes)
@@ -182,7 +196,7 @@ Troubleshooting:
 
 This plugin makes network requests to do its job:
 - Fetches article content from the URL you provide (Readability extraction).
-- Sends extracted text (trimmed to your limit), prompt, and metadata to OpenAI to generate the formatted note and entity links.
+- Sends extracted text (trimmed to your limit), prompt, and metadata to OpenAI or your local LM Studio server to generate the formatted note and entity links.
 - No analytics/telemetry: only the target URL and OpenAI are contacted.
 
 Stored locally:
