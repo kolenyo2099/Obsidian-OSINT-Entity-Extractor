@@ -1,0 +1,34 @@
+{
+  "name": "osint-ner",
+  "version": "0.1.2",
+  "description": "Import web articles, extract OSINT-relevant entities with OpenAI, and save validated Markdown notes.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "node esbuild.config.mjs --watch",
+    "lint": "eslint --ext .ts src"
+  },
+  "keywords": [
+    "obsidian-plugin",
+    "openai",
+    "readability",
+    "article-import"
+  ],
+  "author": "thomasjjj",
+  "license": "GPL-3.0-only",
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-obsidianmd": "^0.1.9",
+    "obsidian": "^1.6.4",
+    "tslib": "^2.8.1",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.4.4",
+    "openai": "^4.80.0"
+  }
+}
