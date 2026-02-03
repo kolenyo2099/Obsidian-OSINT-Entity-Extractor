@@ -1,7 +1,8 @@
 import { requestUrl } from "obsidian";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import type { ExtractedArticle } from "./types";
+import type { ExtractedArticle, ExtractedContent } from "./types";
+import { detectContentType, fetchAndExtractPdf } from "./pdf";
 
 const USER_AGENT = "OSINT-Entity-Extractor/0.1.1 (+https://github.com/thomasjjj/obsidian-osint-ner)";
 
@@ -107,9 +108,29 @@ export async function fetchAndExtract(url: string, maxChars: number): Promise<Ex
       text: trimText(text, maxChars),
       sourceGuess,
       links,
-      images
+      images,
+      contentType: "html" as const
     };
   } finally {
     dom.window.close();
   }
+}
+
+/**
+ * Unified extraction function that handles both HTML and PDF content
+ * Automatically detects content type and routes to appropriate extractor
+ */
+export async function fetchAndExtractContent(
+  url: string,
+  maxChars: number,
+  pdfMaxPages?: number
+): Promise<ExtractedContent> {
+  // Detect content type
+  const { isPdf } = await detectContentType(url);
+
+  if (isPdf) {
+    return fetchAndExtractPdf(url, maxChars, pdfMaxPages);
+  }
+
+  return fetchAndExtract(url, maxChars);
 }

@@ -1,10 +1,11 @@
 import OpenAI from "openai";
-import type { ExtractedArticle } from "./types";
+import type { ExtractedArticle, ExtractedContent, ExtractedPdf } from "./types";
 import { PROMPT_TEMPLATE } from "./prompt";
+import { arrayBufferToBase64, isVisionModel } from "./pdf";
 
 export function buildPrompt(
   url: string,
-  meta: ExtractedArticle,
+  meta: ExtractedArticle | ExtractedPdf | ExtractedContent,
   defaultTags?: string | string[],
   promptTemplate: string = PROMPT_TEMPLATE
 ): string {
@@ -38,7 +39,7 @@ export async function formatWithModel(
   apiKey: string,
   model: string,
   url: string,
-  meta: ExtractedArticle,
+  meta: ExtractedArticle | ExtractedPdf | ExtractedContent,
   defaultTags?: string | string[],
   promptTemplate?: string,
   provider: "openai" | "lmstudio" = "openai",
@@ -62,6 +63,60 @@ export async function formatWithModel(
   });
 
   const output = resp.output_text ?? "";
+  return output.trim();
+}
+
+/**
+ * Format a PDF using native vision input (OpenAI only)
+ * This sends the PDF directly to the model for visual analysis
+ */
+export async function formatPdfWithVision(
+  apiKey: string,
+  model: string,
+  url: string,
+  meta: ExtractedPdf,
+  defaultTags?: string | string[],
+  promptTemplate?: string
+): Promise<string> {
+  if (!isVisionModel(model)) {
+    throw new Error(`Model ${model} does not support native PDF input. Use text extraction mode instead.`);
+  }
+
+  if (!meta.pdfBuffer) {
+    throw new Error("PDF buffer not available for native vision processing");
+  }
+
+  const client = getOpenAIClient(apiKey);
+  const prompt = buildPrompt(url, meta, defaultTags, promptTemplate || PROMPT_TEMPLATE);
+
+  // Convert PDF to base64
+  const base64Pdf = arrayBufferToBase64(meta.pdfBuffer);
+
+  // Use chat completions API with vision/file input
+  // The content parts need to be cast to handle the file type which may not be in older type definitions
+  const fileContent = {
+    type: "file",
+    file: {
+      filename: "document.pdf",
+      file_data: `data:application/pdf;base64,${base64Pdf}`
+    }
+  };
+  const textContent = {
+    type: "text",
+    text: prompt
+  };
+  const resp = await client.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: "user",
+        content: [fileContent, textContent] as OpenAI.Chat.Completions.ChatCompletionContentPart[]
+      }
+    ],
+    max_tokens: 4096
+  });
+
+  const output = resp.choices?.[0]?.message?.content ?? "";
   return output.trim();
 }
 

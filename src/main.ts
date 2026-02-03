@@ -1,11 +1,13 @@
-﻿import { App, Modal, Notice, Plugin, PluginManifest, Setting } from "obsidian";
+﻿import { App, Modal, Notice, Plugin, PluginManifest, Setting, TFile } from "obsidian";
 import { UrlToVaultSettingTab } from "./settings";
-import { DEFAULT_SETTINGS, PluginSettings } from "./types";
-import { fetchAndExtract } from "./extract";
-import { formatWithModel, getOpenAIClient } from "./openai";
+import { DEFAULT_SETTINGS, PluginSettings, BatchResult } from "./types";
+import { fetchAndExtractContent } from "./extract";
+import { formatWithModel, formatPdfWithVision, getOpenAIClient } from "./openai";
 import { ensureFrontmatterPresent, saveNoteToVault } from "./note";
-import type { ExtractedArticle } from "./types";
+import type { ExtractedContent, ExtractedPdf } from "./types";
 import { normalizeTags } from "./tags";
+import { parseUrlInput, getSampleCsvTemplate } from "./csv";
+import { isVisionModel } from "./pdf";
 
 const SECRET_KEY_ID = "osint-ner-openai-key";
 
@@ -98,6 +100,93 @@ class UrlInputModal extends Modal {
   }
 }
 
+class BatchImportModal extends Modal {
+  onSubmit: (csvContent: string) => void;
+  textArea: HTMLTextAreaElement | null = null;
+
+  constructor(app: App, onSubmit: (csvContent: string) => void) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Batch import from CSV" });
+
+    contentEl.createEl("p", {
+      text: "Paste a CSV with URLs or a simple list of URLs (one per line).",
+      cls: "setting-item-description"
+    });
+
+    // Text area for CSV/URL list
+    const textAreaContainer = contentEl.createDiv({ cls: "batch-import-textarea-container" });
+    this.textArea = textAreaContainer.createEl("textarea", {
+      attr: {
+        rows: "12",
+        placeholder: getSampleCsvTemplate()
+      }
+    });
+    this.textArea.style.width = "100%";
+    this.textArea.style.fontFamily = "monospace";
+    this.textArea.style.fontSize = "12px";
+
+    // Paste button
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn
+          .setButtonText("Paste from clipboard")
+          .onClick(() => {
+            void (async () => {
+              try {
+                const readText = navigator.clipboard?.readText;
+                if (!readText) {
+                  new Notice("Clipboard unavailable in this context.");
+                  return;
+                }
+                const clip = await readText.call(navigator.clipboard);
+                if (this.textArea) {
+                  this.textArea.value = clip;
+                }
+              } catch (err) {
+                console.warn("Clipboard read failed", err);
+                new Notice("Couldn't read clipboard in this context.");
+              }
+            })();
+          })
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Insert sample")
+          .onClick(() => {
+            if (this.textArea) {
+              this.textArea.value = getSampleCsvTemplate();
+            }
+          })
+      );
+
+    // Import button
+    new Setting(contentEl).addButton((btn) =>
+      btn
+        .setButtonText("Start batch import")
+        .setCta()
+        .onClick(() => {
+          const content = this.textArea?.value || "";
+          if (!content.trim()) {
+            new Notice("Please enter URLs to import.");
+            return;
+          }
+          this.close();
+          void this.onSubmit(content);
+        })
+    );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
 export default class UrlToVaultPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
 
@@ -121,6 +210,14 @@ export default class UrlToVaultPlugin extends Plugin {
       name: "Import article from URL",
       callback: () => {
         openImportModal();
+      }
+    });
+
+    this.addCommand({
+      id: "batch-import-from-csv",
+      name: "Batch import from CSV/URL list",
+      callback: () => {
+        new BatchImportModal(this.app, (csv) => void this.runBatchImport(csv)).open();
       }
     });
 
@@ -208,32 +305,46 @@ export default class UrlToVaultPlugin extends Plugin {
     return undefined;
   }
 
-  async runImport(url: string) {
+  async runImport(url: string): Promise<TFile | null> {
     const normalizedUrl = ensureHttpScheme(url);
     if (!normalizedUrl) {
       new Notice("Please enter a URL.");
-      return;
+      return null;
     }
     try {
       new URL(normalizedUrl);
     } catch {
       new Notice("Please enter a valid URL.");
-      return;
+      return null;
     }
 
     const apiKey = await this.getApiKey();
     if (this.settings.provider === "openai" && !apiKey) {
       new Notice("Set your OpenAI API key in the plugin settings first.", 6000);
-      return;
+      return null;
     }
 
-    const progress = new Notice(renderTwoStepProgress(1, "Fetching article..."), 0);
+    const progress = new Notice(renderTwoStepProgress(1, "Fetching content..."), 0);
 
     try {
-      const meta = await fetchAndExtract(normalizedUrl, this.settings.maxChars);
-      this.logVerbose("Fetched metadata", meta);
+      // Use unified extraction that handles both HTML and PDF
+      const meta = await fetchAndExtractContent(
+        normalizedUrl,
+        this.settings.maxChars,
+        this.settings.pdfMaxPages
+      );
+
+      const isPdf = meta.contentType === "pdf";
+      this.logVerbose("Fetched metadata", { ...meta, pdfBuffer: isPdf ? "[ArrayBuffer]" : undefined });
+
       if (!meta.text) {
-        new Notice("No article text extracted; sending minimal content to OpenAI.", 6000);
+        const contentType = isPdf ? "PDF" : "article";
+        new Notice(`No ${contentType} text extracted; sending minimal content to LLM.`, 6000);
+      }
+
+      if (isPdf) {
+        const pdfMeta = meta as ExtractedPdf;
+        this.logVerbose(`PDF detected: ${pdfMeta.pageCount} pages`);
       }
 
       const providerLabel = this.settings.provider === "lmstudio" ? "LM Studio" : "OpenAI";
@@ -248,14 +359,31 @@ export default class UrlToVaultPlugin extends Plugin {
       }
 
       const defaultTags = normalizeTags(this.settings.defaultTags);
-      const note = await this.callModelWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
+
+      // Determine if we should use native PDF vision
+      let note: string;
+      const useNativeVision =
+        isPdf &&
+        this.settings.provider === "openai" &&
+        this.settings.pdfHandling === "native-vision" &&
+        isVisionModel(this.settings.model);
+
+      if (useNativeVision && isPdf) {
+        const pdfMeta = meta as ExtractedPdf;
+        this.logVerbose("Using native PDF vision processing");
+        note = await this.callPdfVisionWithRetries(apiKey, normalizedUrl, pdfMeta, promptTemplate, defaultTags);
+      } else {
+        // Text extraction path (works for both HTML and PDF)
+        note = await this.callModelWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
+      }
+
       const validated = ensureFrontmatterPresent(note);
       const parts: string[] = [];
       parts.push(validated);
 
       if (this.settings.includeRaw) {
-        const rawHeader = "## Extracted article (plaintext)";
-        const rawBody = meta.text?.trim() ? meta.text.trim() : "_No article text extracted._";
+        const rawHeader = isPdf ? "## Extracted PDF text (plaintext)" : "## Extracted article (plaintext)";
+        const rawBody = meta.text?.trim() ? meta.text.trim() : "_No text extracted._";
         parts.push("", rawHeader, "", rawBody);
       }
 
@@ -282,7 +410,7 @@ export default class UrlToVaultPlugin extends Plugin {
       const file = await saveNoteToVault(
         this.app.vault,
         this.settings.outputFolder,
-        meta.title || "article",
+        meta.title || (isPdf ? "document" : "article"),
         finalNote
       );
 
@@ -292,19 +420,220 @@ export default class UrlToVaultPlugin extends Plugin {
 
       progress.setMessage("Done");
       new Notice(`Saved: ${file.path}`);
+      return file;
     } catch (err: unknown) {
       console.error(err);
       const message = err instanceof Error ? err.message : String(err);
       new Notice(`Import failed: ${message}`, 8000);
+      return null;
     } finally {
       progress.hide();
     }
   }
 
+  async runBatchImport(csvContent: string): Promise<void> {
+    const { entries, errors } = parseUrlInput(csvContent);
+
+    if (errors.length > 0) {
+      this.logVerbose("CSV parsing errors:", errors);
+      new Notice(`CSV parsing: ${errors.length} warning(s). Check console for details.`, 5000);
+    }
+
+    if (entries.length === 0) {
+      new Notice("No valid URLs found in the input.");
+      return;
+    }
+
+    const apiKey = await this.getApiKey();
+    if (this.settings.provider === "openai" && !apiKey) {
+      new Notice("Set your OpenAI API key in the plugin settings first.", 6000);
+      return;
+    }
+
+    new Notice(`Starting batch import of ${entries.length} URL(s)...`);
+    const progress = new Notice(`Batch: 0/${entries.length}`, 0);
+
+    const results: BatchResult = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const label = entry.label || entry.url;
+      progress.setMessage(`Batch: ${i + 1}/${entries.length} - ${label.slice(0, 40)}...`);
+
+      try {
+        const file = await this.runImportSilent(entry.url);
+        if (file) {
+          results.success++;
+        } else {
+          results.failed++;
+          results.errors.push({ url: entry.url, message: "Import returned null" });
+        }
+      } catch (err: unknown) {
+        results.failed++;
+        const message = err instanceof Error ? err.message : String(err);
+        results.errors.push({ url: entry.url, message });
+        this.logVerbose(`Batch import error for ${entry.url}:`, err);
+
+        if (!this.settings.batchContinueOnError) {
+          progress.hide();
+          new Notice(`Batch stopped due to error: ${message}`, 8000);
+          break;
+        }
+      }
+
+      // Rate limiting delay between requests
+      if (i < entries.length - 1) {
+        await this.sleep(this.settings.batchDelayMs);
+      }
+    }
+
+    progress.hide();
+
+    // Show results
+    const resultMsg = `Batch complete: ${results.success} succeeded, ${results.failed} failed`;
+    new Notice(resultMsg, 6000);
+
+    // Create error report if enabled and there were errors
+    if (this.settings.batchCreateReport && results.errors.length > 0) {
+      await this.createBatchErrorReport(results);
+    }
+  }
+
+  /**
+   * Silent version of runImport that doesn't show per-item notices
+   * Used by batch processing
+   */
+  private async runImportSilent(url: string): Promise<TFile | null> {
+    const normalizedUrl = ensureHttpScheme(url);
+    if (!normalizedUrl) {
+      throw new Error("Empty URL");
+    }
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      throw new Error("Invalid URL");
+    }
+
+    const apiKey = await this.getApiKey();
+
+    // Use unified extraction that handles both HTML and PDF
+    const meta = await fetchAndExtractContent(
+      normalizedUrl,
+      this.settings.maxChars,
+      this.settings.pdfMaxPages
+    );
+
+    const isPdf = meta.contentType === "pdf";
+    this.logVerbose("Fetched metadata (batch)", { title: meta.title, isPdf });
+
+    const promptTemplate =
+      this.settings.useCustomPrompt && this.settings.customPrompt.trim()
+        ? this.settings.customPrompt
+        : undefined;
+
+    const defaultTags = normalizeTags(this.settings.defaultTags);
+
+    // Determine if we should use native PDF vision
+    let note: string;
+    const useNativeVision =
+      isPdf &&
+      this.settings.provider === "openai" &&
+      this.settings.pdfHandling === "native-vision" &&
+      isVisionModel(this.settings.model);
+
+    if (useNativeVision && isPdf) {
+      const pdfMeta = meta as ExtractedPdf;
+      note = await this.callPdfVisionWithRetries(apiKey, normalizedUrl, pdfMeta, promptTemplate, defaultTags);
+    } else {
+      note = await this.callModelWithRetries(apiKey, normalizedUrl, meta, promptTemplate, defaultTags);
+    }
+
+    const validated = ensureFrontmatterPresent(note);
+    const parts: string[] = [];
+    parts.push(validated);
+
+    if (this.settings.includeRaw) {
+      const rawHeader = isPdf ? "## Extracted PDF text (plaintext)" : "## Extracted article (plaintext)";
+      const rawBody = meta.text?.trim() ? meta.text.trim() : "_No text extracted._";
+      parts.push("", rawHeader, "", rawBody);
+    }
+
+    if (this.settings.includeLinks && meta.links.length) {
+      parts.push("", "## Extracted links");
+      const linkLines = meta.links.map((l) => {
+        const text = l.text || l.href;
+        return `- [${text}](${l.href})`;
+      });
+      parts.push(...linkLines);
+    }
+
+    if (this.settings.includeImages && meta.images.length) {
+      parts.push("", "## Extracted images");
+      const imageLines = meta.images.map((img) => {
+        const alt = img.alt || "image";
+        return `- ![${alt}](${img.src})`;
+      });
+      parts.push(...imageLines);
+    }
+
+    const finalNote = parts.join("\n");
+
+    return saveNoteToVault(
+      this.app.vault,
+      this.settings.outputFolder,
+      meta.title || (isPdf ? "document" : "article"),
+      finalNote
+    );
+  }
+
+  private async createBatchErrorReport(results: BatchResult): Promise<void> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const lines = [
+      "---",
+      `title: "Batch Import Report ${timestamp}"`,
+      "type: batch_report",
+      `total_success: ${results.success}`,
+      `total_failed: ${results.failed}`,
+      "---",
+      "",
+      "## Batch Import Errors",
+      ""
+    ];
+
+    for (const error of results.errors) {
+      lines.push(`- **${error.url}**`);
+      lines.push(`  - Error: ${error.message}`);
+      lines.push("");
+    }
+
+    const content = lines.join("\n");
+    const filename = `batch-report-${timestamp}`;
+
+    try {
+      const file = await saveNoteToVault(
+        this.app.vault,
+        this.settings.outputFolder,
+        filename,
+        content
+      );
+      this.logVerbose("Created batch error report:", file.path);
+    } catch (err) {
+      console.warn("Failed to create batch error report:", err);
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   private async callModelWithRetries(
     apiKey: string,
     url: string,
-    meta: ExtractedArticle,
+    meta: ExtractedContent,
     promptTemplate?: string,
     defaultTags?: string[]
   ): Promise<string> {
@@ -341,6 +670,61 @@ export default class UrlToVaultPlugin extends Plugin {
           throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
         }
         if (code === "insufficient_quota" && provider === "openai") {
+          throw new Error("OpenAI quota exhausted. Check billing/usage.");
+        }
+
+        // Retriable: 429 (rate limit), 5xx
+        const retriable = status === 429 || (status && status >= 500);
+        if (!retriable || attempt === maxRetries) {
+          break;
+        }
+
+        // Backoff: 0.5s, 2s, 4s...
+        const delayMs = 500 * Math.pow(2, attempt);
+        await new Promise((res) => setTimeout(res, delayMs));
+        attempt += 1;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private async callPdfVisionWithRetries(
+    apiKey: string,
+    url: string,
+    meta: ExtractedPdf,
+    promptTemplate?: string,
+    defaultTags?: string[]
+  ): Promise<string> {
+    const maxRetries = this.settings.maxRetries ?? 0;
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt <= maxRetries) {
+      try {
+        return await formatPdfWithVision(
+          apiKey,
+          this.settings.model,
+          url,
+          meta,
+          defaultTags,
+          promptTemplate
+        );
+      } catch (err: unknown) {
+        lastError = err;
+        const status =
+          (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
+        const code =
+          (err as { code?: string })?.code ??
+          (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+        const msg: string = err instanceof Error ? err.message : String(err);
+        this.logVerbose("OpenAI vision error", { attempt, status, code, msg });
+
+        // Non-retriable: bad key or quota
+        if (status === 401) {
+          throw new Error("OpenAI rejected the API key (401). Re-enter your key in settings.");
+        }
+        if (code === "insufficient_quota") {
           throw new Error("OpenAI quota exhausted. Check billing/usage.");
         }
 

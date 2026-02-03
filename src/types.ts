@@ -6,6 +6,38 @@ export interface ExtractedArticle {
   sourceGuess: string;
   links: { text: string; href: string }[];
   images: { alt: string; src: string }[];
+  contentType: "html";
+}
+
+export interface ExtractedPdf {
+  title: string;
+  authors: string[];
+  published: string;
+  text: string;
+  sourceGuess: string;
+  links: { text: string; href: string }[];
+  images: { alt: string; src: string }[];
+  contentType: "pdf";
+  pageCount: number;
+  pdfBuffer?: ArrayBuffer;
+}
+
+export type ExtractedContent = ExtractedArticle | ExtractedPdf;
+
+export interface CsvUrlEntry {
+  url: string;
+  label?: string;
+}
+
+export interface ParsedCsv {
+  entries: CsvUrlEntry[];
+  errors: string[];
+}
+
+export interface BatchResult {
+  success: number;
+  failed: number;
+  errors: { url: string; message: string }[];
 }
 
 export interface PluginSettings {
@@ -24,6 +56,13 @@ export interface PluginSettings {
   maxRetries: number;
   verboseLogging: boolean;
   apiKey?: string; // fallback storage when SecretStorage is unavailable
+  // PDF settings
+  pdfHandling: "text-extraction" | "native-vision";
+  pdfMaxPages: number;
+  // Batch processing settings
+  batchDelayMs: number;
+  batchContinueOnError: boolean;
+  batchCreateReport: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -41,5 +80,12 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   includeImages: false,
   maxRetries: 2,
   verboseLogging: false,
-  apiKey: ""
+  apiKey: "",
+  // PDF settings
+  pdfHandling: "text-extraction",
+  pdfMaxPages: 50,
+  // Batch processing settings
+  batchDelayMs: 1000,
+  batchContinueOnError: true,
+  batchCreateReport: true
 };

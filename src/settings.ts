@@ -249,6 +249,76 @@ export class UrlToVaultSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl).setName("PDF Processing").setHeading();
+
+    new Setting(containerEl)
+      .setName("PDF handling mode")
+      .setDesc("How to process PDF documents. Text extraction works with all models; native vision requires OpenAI GPT-4o/o3.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("text-extraction", "Extract text (all models)")
+          .addOption("native-vision", "Native vision (OpenAI GPT-4o/o3 only)")
+          .setValue(this.plugin.settings.pdfHandling)
+          .onChange((value) => {
+            this.plugin.settings.pdfHandling = value as "text-extraction" | "native-vision";
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Max PDF pages")
+      .setDesc("Maximum pages to extract text from (for text extraction mode).")
+      .addSlider((slider) =>
+        slider
+          .setLimits(1, 100, 1)
+          .setValue(this.plugin.settings.pdfMaxPages)
+          .setDynamicTooltip()
+          .onChange((value) => {
+            this.plugin.settings.pdfMaxPages = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl).setName("Batch Processing").setHeading();
+
+    new Setting(containerEl)
+      .setName("Delay between items (seconds)")
+      .setDesc("Seconds to wait between processing each URL to avoid rate limits.")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0.5, 10, 0.5)
+          .setValue(this.plugin.settings.batchDelayMs / 1000)
+          .setDynamicTooltip()
+          .onChange((value) => {
+            this.plugin.settings.batchDelayMs = value * 1000;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Continue on error")
+      .setDesc("When a URL fails, continue processing the rest of the batch.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.batchContinueOnError)
+          .onChange((value) => {
+            this.plugin.settings.batchContinueOnError = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Create error report")
+      .setDesc("Generate a summary note listing any failed URLs after batch processing.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.batchCreateReport)
+          .onChange((value) => {
+            this.plugin.settings.batchCreateReport = value;
+            this.saveSettingsDebounced();
+          })
+      );
+
     new Setting(containerEl).setName("Content options").setHeading();
 
     new Setting(containerEl)
