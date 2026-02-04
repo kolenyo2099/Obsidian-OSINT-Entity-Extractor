@@ -1,0 +1,26 @@
+# System files
+.DS_Store
+.trash/
+
+# Node modules
+node_modules/
+
+# Build artifacts (optional: keep main.js/manifest.json for manual installs if desired, but std is to ignore)
+# For this user case: they want "manual install" from source repo, so usually they need main.js. 
+# However, standard practice ignores it. I'll comment it out to allow committing it this time 
+# because the user explicitly asked for "manual install" capability.
+# main.js
+# manifest.json
+# styles.css
+
+# Test data & scripts
+drone_test.csv
+*.csv
+detect_csv.ts
+reproduction.ts
+debug_csv.ts
+verify_*.js
+test/
+
+# Obsidian Vault-specific (if opened as logic vault)
+.obsidian/

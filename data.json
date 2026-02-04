@@ -1,0 +1,22 @@
+{
+  "provider": "lmstudio",
+  "model": "gpt-5-mini",
+  "apiBaseUrl": "http://localhost:1234/v1",
+  "outputFolder": "articles",
+  "defaultTags": "news",
+  "openAfterCreate": true,
+  "maxChars": 12000,
+  "includeRaw": true,
+  "useCustomPrompt": false,
+  "customPrompt": "",
+  "includeLinks": false,
+  "includeImages": false,
+  "maxRetries": 2,
+  "verboseLogging": false,
+  "apiKey": "",
+  "pdfHandling": "text-extraction",
+  "pdfMaxPages": 50,
+  "batchDelayMs": 1000,
+  "batchContinueOnError": true,
+  "batchCreateReport": true
+}
