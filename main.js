@@ -3761,7 +3761,7 @@ function compileCharString(e3, t3, i3, a3) {
   }
   const s3 = [];
   let n3 = 0, r3 = 0, o3 = 0;
-  !function parse2(e4) {
+  !function parse3(e4) {
     let g3 = 0;
     for (; g3 < e4.length; ) {
       let c3, h3, l3, C3, d3, u3, Q3, f3, p3, m3 = false, y3 = e4[g3++];
@@ -3796,7 +3796,7 @@ function compileCharString(e3, t3, i3, a3) {
               t4.privateDict?.subrsIndex && (a4 = t4.privateDict.subrsIndex.objects), a4 && (f3 += getSubroutineBias(a4), p3 = a4[f3]);
             } else warn("Invalid fd index for glyph index.");
           } else p3 = i3.subrs[f3 + i3.subrsBias];
-          p3 && parse2(p3);
+          p3 && parse3(p3);
           break;
         case 11:
           return;
@@ -3855,7 +3855,7 @@ function compileCharString(e3, t3, i3, a3) {
           s3.push((e4[g3] << 24 | e4[g3 + 1] << 16) >> 16), g3 += 2;
           break;
         case 29:
-          f3 = s3.pop() + i3.gsubrsBias, p3 = i3.gsubrs[f3], p3 && parse2(p3);
+          f3 = s3.pop() + i3.gsubrsBias, p3 = i3.gsubrs[f3], p3 && parse3(p3);
           break;
         case 30:
           for (; s3.length > 0 && (c3 = n3, l3 = r3 + s3.shift(), h3 = c3 + s3.shift(), C3 = l3 + s3.shift(), n3 = h3 + s3.shift(), r3 = C3 + (1 === s3.length ? s3.shift() : 0), bezierCurveTo(c3, l3, h3, C3, n3, r3), 0 !== s3.length); ) c3 = n3 + s3.shift(), l3 = r3, h3 = c3 + s3.shift(), C3 = l3 + s3.shift(), r3 = C3 + s3.shift(), n3 = h3 + (1 === s3.length ? s3.shift() : 0), bezierCurveTo(c3, l3, h3, C3, n3, r3);
@@ -36558,14 +36558,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path = url.path;
-      if (path.length === 0) {
+      const path2 = url.path;
+      if (path2.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path.length === 1 && isNormalizedWindowsDriveLetter(path[0])) {
+      if (url.scheme === "file" && path2.length === 1 && isNormalizedWindowsDriveLetter(path2[0])) {
         return;
       }
-      path.pop();
+      path2.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -40909,7 +40909,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse2(val);
+        return parse3(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -40917,7 +40917,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse2(str2) {
+    function parse3(str2) {
       str2 = String(str2);
       if (str2.length > 100) {
         return;
@@ -42144,14 +42144,14 @@ __export(fileFromPath_exports, {
   fileFromPathSync: () => fileFromPathSync,
   isFile: () => isFile
 });
-function createFileFromPath(path, { mtimeMs, size }, filenameOrOptions, options = {}) {
+function createFileFromPath(path2, { mtimeMs, size }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path, size, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path2, size, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -42160,13 +42160,13 @@ function createFileFromPath(path, { mtimeMs, size }, filenameOrOptions, options 
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path, filenameOrOptions, options = {}) {
-  const stats = (0, import_fs.statSync)(path);
-  return createFileFromPath(path, stats, filenameOrOptions, options);
+function fileFromPathSync(path2, filenameOrOptions, options = {}) {
+  const stats = (0, import_fs.statSync)(path2);
+  return createFileFromPath(path2, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path, filenameOrOptions, options) {
-  const stats = await import_fs.promises.stat(path);
-  return createFileFromPath(path, stats, filenameOrOptions, options);
+async function fileFromPath2(path2, filenameOrOptions, options) {
+  const stats = await import_fs.promises.stat(path2);
+  return createFileFromPath(path2, stats, filenameOrOptions, options);
 }
 var import_fs, import_path, import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -43999,17 +43999,7 @@ function extractLinksAndImages(articleHtml, baseUrl) {
   }).filter((i3) => !!i3 && !!i3.src);
   return { links, images };
 }
-async function fetchAndExtract(url, maxChars) {
-  const resp = await (0, import_obsidian3.requestUrl)({
-    url,
-    headers: {
-      "User-Agent": USER_AGENT2
-    }
-  });
-  if (resp.status >= 400) {
-    throw new Error(`HTTP ${resp.status} when fetching URL`);
-  }
-  const html = resp.text;
+async function extractFromHtml(html, url, maxChars) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
   if (!doc.querySelector("base")) {
@@ -44034,6 +44024,18 @@ async function fetchAndExtract(url, maxChars) {
     images,
     contentType: "html"
   };
+}
+async function fetchAndExtract(url, maxChars) {
+  const resp = await (0, import_obsidian3.requestUrl)({
+    url,
+    headers: {
+      "User-Agent": USER_AGENT2
+    }
+  });
+  if (resp.status >= 400) {
+    throw new Error(`HTTP ${resp.status} when fetching URL`);
+  }
+  return extractFromHtml(resp.text, url, maxChars);
 }
 async function fetchAndExtractContent(url, maxChars, pdfMaxPages) {
   const { isPdf } = await detectContentType(url);
@@ -44790,13 +44792,13 @@ var MultipartBody = class {
 // node_modules/openai/_shims/node-runtime.mjs
 var import_web = require("node:stream/web");
 var fileFromPathWarned = false;
-async function fileFromPath3(path, ...args) {
+async function fileFromPath3(path2, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path, ...args);
+  return await _fileFromPath(path2, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -45580,29 +45582,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path, opts) {
-    return this.methodRequest("get", path, opts);
+  get(path2, opts) {
+    return this.methodRequest("get", path2, opts);
   }
-  post(path, opts) {
-    return this.methodRequest("post", path, opts);
+  post(path2, opts) {
+    return this.methodRequest("post", path2, opts);
   }
-  patch(path, opts) {
-    return this.methodRequest("patch", path, opts);
+  patch(path2, opts) {
+    return this.methodRequest("patch", path2, opts);
   }
-  put(path, opts) {
-    return this.methodRequest("put", path, opts);
+  put(path2, opts) {
+    return this.methodRequest("put", path2, opts);
   }
-  delete(path, opts) {
-    return this.methodRequest("delete", path, opts);
+  delete(path2, opts) {
+    return this.methodRequest("delete", path2, opts);
   }
-  methodRequest(method, path, opts) {
+  methodRequest(method, path2, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path, ...opts2, body };
+      return { method, path: path2, ...opts2, body };
     }));
   }
-  getAPIList(path, Page3, opts) {
-    return this.requestAPIList(Page3, { method: "get", path, ...opts });
+  getAPIList(path2, Page3, opts) {
+    return this.requestAPIList(Page3, { method: "get", path: path2, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -45621,10 +45623,10 @@ var APIClient = class {
   }
   buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path, query, headers = {} } = options;
+    const { method, path: path2, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path, query);
+    const url = this.buildURL(path2, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -45740,8 +45742,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page3);
   }
-  buildURL(path, query) {
-    const url = isAbsoluteURL(path) ? new URL(path) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path.startsWith("/") ? path.slice(1) : path));
+  buildURL(path2, query) {
+    const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -50967,6 +50969,8 @@ https://example.com/article2,Second Article`;
 
 // src/main.ts
 init_pdf();
+var fs3 = __toESM(require("fs"));
+var path = __toESM(require("path"));
 var SECRET_KEY_ID = "osint-ner-openai-key";
 function ensureHttpScheme(url) {
   const trimmed = url.trim();
@@ -51152,6 +51156,44 @@ var ManualImportModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
+var FolderInputModal = class extends import_obsidian5.Modal {
+  constructor(app, onSubmit) {
+    super(app);
+    this.value = "";
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Batch import from local folder" });
+    contentEl.createEl("p", {
+      text: "Enter the absolute path to a folder containing PDF or HTML files.",
+      cls: "setting-item-description"
+    });
+    const folderSetting = new import_obsidian5.Setting(contentEl).setName("Folder Path");
+    folderSetting.addText((text) => {
+      text.inputEl.placeholder = "/Users/username/Documents/articles";
+      text.onChange((value) => this.value = value.trim());
+      text.inputEl.addEventListener("keydown", (e3) => {
+        if (e3.key === "Enter") {
+          e3.preventDefault();
+          this.close();
+          this.onSubmit(this.value);
+        }
+      });
+      text.inputEl.focus();
+    });
+    new import_obsidian5.Setting(contentEl).addButton(
+      (btn) => btn.setButtonText("Import Folder").setCta().onClick(() => {
+        this.close();
+        void this.onSubmit(this.value);
+      })
+    );
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var UrlToVaultPlugin = class extends import_obsidian5.Plugin {
   constructor(app, manifest) {
     super(app, manifest);
@@ -51177,6 +51219,13 @@ var UrlToVaultPlugin = class extends import_obsidian5.Plugin {
       name: "Batch import from CSV/URL list",
       callback: () => {
         new BatchImportModal(this.app, (csv) => void this.runBatchImport(csv)).open();
+      }
+    });
+    this.addCommand({
+      id: "import-from-folder",
+      name: "Batch import from local folder",
+      callback: () => {
+        new FolderInputModal(this.app, (folderPath) => void this.runFolderImport(folderPath)).open();
       }
     });
     this.addRibbonIcon("link", "Import article from URL", () => {
@@ -51491,6 +51540,117 @@ var UrlToVaultPlugin = class extends import_obsidian5.Plugin {
       this.app.vault,
       this.settings.outputFolder,
       meta.title || (isPdf ? "document" : "article"),
+      finalNote
+    );
+  }
+  async runFolderImport(folderPath) {
+    if (!folderPath || !fs3.existsSync(folderPath)) {
+      new import_obsidian5.Notice("Folder does not exist.");
+      return;
+    }
+    const stat = fs3.statSync(folderPath);
+    if (!stat.isDirectory()) {
+      new import_obsidian5.Notice("Path is not a directory.");
+      return;
+    }
+    const files = fs3.readdirSync(folderPath).filter((name) => {
+      const lower = name.toLowerCase();
+      return lower.endsWith(".pdf") || lower.endsWith(".html") || lower.endsWith(".htm");
+    });
+    if (files.length === 0) {
+      new import_obsidian5.Notice("No supported files (PDF, HTML) found in folder.");
+      return;
+    }
+    new import_obsidian5.Notice(`Starting folder import of ${files.length} file(s)...`);
+    const progress = new import_obsidian5.Notice(`Folder: 0/${files.length}`, 0);
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+    const apiKey = await this.getApiKey();
+    if (this.settings.provider === "openai" && !apiKey) {
+      new import_obsidian5.Notice("Set your OpenAI API key in the plugin settings first.", 6e3);
+      return;
+    }
+    for (let i3 = 0; i3 < files.length; i3++) {
+      const fileName = files[i3];
+      const filePath = path.join(folderPath, fileName);
+      progress.setMessage(`Folder: ${i3 + 1}/${files.length} - ${fileName}...`);
+      try {
+        await this.runFolderImportSilent(filePath, fileName, apiKey);
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        const message = err instanceof Error ? err.message : String(err);
+        results.errors.push({ url: filePath, message });
+        this.logVerbose(`Folder import error for ${fileName}:`, err);
+        if (!this.settings.batchContinueOnError) {
+          progress.hide();
+          new import_obsidian5.Notice(`Folder import stopped due to error: ${message}`, 8e3);
+          break;
+        }
+      }
+      if (i3 < files.length - 1) {
+        await this.sleep(this.settings.batchDelayMs);
+      }
+    }
+    progress.hide();
+    const resultMsg = `Folder import complete: ${results.success} succeeded, ${results.failed} failed`;
+    new import_obsidian5.Notice(resultMsg, 6e3);
+    if (this.settings.batchCreateReport && results.errors.length > 0) {
+      await this.createBatchErrorReport(results);
+    }
+  }
+  async runFolderImportSilent(filePath, fileName, apiKey) {
+    const ext = path.extname(fileName).toLowerCase();
+    let meta;
+    if (ext === ".pdf") {
+      const buffer = fs3.readFileSync(filePath);
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const fakeUrl = `file://${filePath}`;
+      meta = await extractPdfContent(arrayBuffer, fakeUrl, this.settings.maxChars, this.settings.pdfMaxPages);
+    } else {
+      const html = fs3.readFileSync(filePath, "utf-8");
+      const fakeUrl = `file://${filePath}`;
+      meta = await extractFromHtml(html, fakeUrl, this.settings.maxChars);
+    }
+    const promptTemplate = this.settings.useCustomPrompt && this.settings.customPrompt.trim() ? this.settings.customPrompt : void 0;
+    const defaultTags = normalizeTags(this.settings.defaultTags);
+    let note;
+    const isPdf = meta.contentType === "pdf";
+    const useNativeVision = isPdf && this.settings.provider === "openai" && this.settings.pdfHandling === "native-vision" && isVisionModel(this.settings.model);
+    if (useNativeVision && isPdf) {
+      const pdfMeta = meta;
+      note = await this.callPdfVisionWithRetries(apiKey, `file://${filePath}`, pdfMeta, promptTemplate, defaultTags);
+    } else {
+      note = await this.callModelWithRetries(apiKey, `file://${filePath}`, meta, promptTemplate, defaultTags);
+    }
+    const validated = ensureFrontmatterPresent(note);
+    const parts = [];
+    parts.push(validated);
+    if (this.settings.includeRaw) {
+      const rawHeader = isPdf ? "## Extracted PDF text (plaintext)" : "## Extracted article (plaintext)";
+      const rawBody = meta.text?.trim() ? meta.text.trim() : "_No text extracted._";
+      parts.push("", rawHeader, "", rawBody);
+    }
+    if (this.settings.includeLinks && meta.links.length) {
+      parts.push("", "## Extracted links");
+      parts.push(...meta.links.map((l3) => `- [${l3.text || l3.href}](${l3.href})`));
+    }
+    if (this.settings.includeImages && meta.images.length) {
+      parts.push("", "## Extracted images");
+      parts.push(...meta.images.map((img) => `- ![${img.alt || "image"}](${img.src})`));
+    }
+    const finalNote = parts.join("\n");
+    let title = meta.title;
+    if (!title || title === "document" || title === "article") {
+      title = path.parse(fileName).name;
+    }
+    await saveNoteToVault(
+      this.app.vault,
+      this.settings.outputFolder,
+      title,
       finalNote
     );
   }

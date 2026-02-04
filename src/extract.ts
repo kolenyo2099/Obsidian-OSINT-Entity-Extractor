@@ -85,19 +85,7 @@ function extractLinksAndImages(articleHtml: string, baseUrl: string) {
   return { links, images };
 }
 
-export async function fetchAndExtract(url: string, maxChars: number): Promise<ExtractedArticle> {
-  const resp = await requestUrl({
-    url,
-    headers: {
-      "User-Agent": USER_AGENT
-    }
-  });
-
-  if (resp.status >= 400) {
-    throw new Error(`HTTP ${resp.status} when fetching URL`);
-  }
-
-  const html = resp.text;
+export async function extractFromHtml(html: string, url: string, maxChars: number): Promise<ExtractedArticle> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
@@ -133,6 +121,21 @@ export async function fetchAndExtract(url: string, maxChars: number): Promise<Ex
     images,
     contentType: "html" as const
   };
+}
+
+export async function fetchAndExtract(url: string, maxChars: number): Promise<ExtractedArticle> {
+  const resp = await requestUrl({
+    url,
+    headers: {
+      "User-Agent": USER_AGENT
+    }
+  });
+
+  if (resp.status >= 400) {
+    throw new Error(`HTTP ${resp.status} when fetching URL`);
+  }
+
+  return extractFromHtml(resp.text, url, maxChars);
 }
 
 /**

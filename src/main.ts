@@ -7,7 +7,10 @@ import { ensureFrontmatterPresent, saveNoteToVault } from "./note";
 import type { ExtractedContent, ExtractedPdf } from "./types";
 import { normalizeTags } from "./tags";
 import { parseUrlInput, getSampleCsvTemplate } from "./csv";
-import { isVisionModel } from "./pdf";
+import { isVisionModel, extractPdfContent } from "./pdf";
+import { extractFromHtml } from "./extract";
+import * as fs from "fs";
+import * as path from "path";
 
 const SECRET_KEY_ID = "osint-ner-openai-key";
 
@@ -33,7 +36,7 @@ class UrlInputModal extends Modal {
     this.onSubmit = onSubmit;
   }
 
-  onOpen() {
+  override onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Import article from URL" });
@@ -95,7 +98,7 @@ class UrlInputModal extends Modal {
     );
   }
 
-  onClose() {
+  override onClose() {
     this.contentEl.empty();
   }
 }
@@ -109,7 +112,7 @@ class BatchImportModal extends Modal {
     this.onSubmit = onSubmit;
   }
 
-  onOpen() {
+  override onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Batch import from CSV" });
@@ -182,7 +185,7 @@ class BatchImportModal extends Modal {
     );
   }
 
-  onClose() {
+  override onClose() {
     this.contentEl.empty();
   }
 }
@@ -198,7 +201,7 @@ class ManualImportModal extends Modal {
     this.onSubmit = onSubmit;
   }
 
-  onOpen() {
+  override onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Manual Import Required" });
@@ -242,7 +245,56 @@ class ManualImportModal extends Modal {
     });
   }
 
-  onClose() {
+  override onClose() {
+    this.contentEl.empty();
+  }
+}
+
+class FolderInputModal extends Modal {
+  onSubmit: (folderPath: string) => void;
+  value = "";
+
+  constructor(app: App, onSubmit: (folderPath: string) => void) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+
+  override onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Batch import from local folder" });
+
+    contentEl.createEl("p", {
+      text: "Enter the absolute path to a folder containing PDF or HTML files.",
+      cls: "setting-item-description"
+    });
+
+    const folderSetting = new Setting(contentEl).setName("Folder Path");
+    folderSetting.addText((text) => {
+      text.inputEl.placeholder = "/Users/username/Documents/articles";
+      text.onChange((value) => (this.value = value.trim()));
+      text.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.close();
+          this.onSubmit(this.value);
+        }
+      });
+      text.inputEl.focus();
+    });
+
+    new Setting(contentEl).addButton((btn) =>
+      btn
+        .setButtonText("Import Folder")
+        .setCta()
+        .onClick(() => {
+          this.close();
+          void this.onSubmit(this.value);
+        })
+    );
+  }
+
+  override onClose() {
     this.contentEl.empty();
   }
 }
@@ -259,7 +311,7 @@ export default class UrlToVaultPlugin extends Plugin {
     }
   }
 
-  async onload() {
+  override async onload() {
     await this.loadSettings();
 
     const openImportModal = () => new UrlInputModal(this.app, (url) => void this.runImport(url)).open();
@@ -277,6 +329,14 @@ export default class UrlToVaultPlugin extends Plugin {
       name: "Batch import from CSV/URL list",
       callback: () => {
         new BatchImportModal(this.app, (csv) => void this.runBatchImport(csv)).open();
+      }
+    });
+
+    this.addCommand({
+      id: "import-from-folder",
+      name: "Batch import from local folder",
+      callback: () => {
+        new FolderInputModal(this.app, (folderPath) => void this.runFolderImport(folderPath)).open();
       }
     });
 
@@ -681,6 +741,149 @@ export default class UrlToVaultPlugin extends Plugin {
       this.app.vault,
       this.settings.outputFolder,
       meta.title || (isPdf ? "document" : "article"),
+      finalNote
+    );
+  }
+
+  async runFolderImport(folderPath: string): Promise<void> {
+    if (!folderPath || !fs.existsSync(folderPath)) {
+      new Notice("Folder does not exist.");
+      return;
+    }
+
+    const stat = fs.statSync(folderPath);
+    if (!stat.isDirectory()) {
+      new Notice("Path is not a directory.");
+      return;
+    }
+
+    const files = fs.readdirSync(folderPath).filter(name => {
+      const lower = name.toLowerCase();
+      return lower.endsWith(".pdf") || lower.endsWith(".html") || lower.endsWith(".htm");
+    });
+
+    if (files.length === 0) {
+      new Notice("No supported files (PDF, HTML) found in folder.");
+      return;
+    }
+
+    new Notice(`Starting folder import of ${files.length} file(s)...`);
+    const progress = new Notice(`Folder: 0/${files.length}`, 0);
+
+    const results: BatchResult = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    const apiKey = await this.getApiKey();
+    if (this.settings.provider === "openai" && !apiKey) {
+      new Notice("Set your OpenAI API key in the plugin settings first.", 6000);
+      return;
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const fileName = files[i];
+      const filePath = path.join(folderPath, fileName);
+      progress.setMessage(`Folder: ${i + 1}/${files.length} - ${fileName}...`);
+
+      try {
+        await this.runFolderImportSilent(filePath, fileName, apiKey);
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        const message = err instanceof Error ? err.message : String(err);
+        results.errors.push({ url: filePath, message });
+        this.logVerbose(`Folder import error for ${fileName}:`, err);
+
+        if (!this.settings.batchContinueOnError) {
+          progress.hide();
+          new Notice(`Folder import stopped due to error: ${message}`, 8000);
+          break;
+        }
+      }
+
+      if (i < files.length - 1) {
+        await this.sleep(this.settings.batchDelayMs);
+      }
+    }
+
+    progress.hide();
+    const resultMsg = `Folder import complete: ${results.success} succeeded, ${results.failed} failed`;
+    new Notice(resultMsg, 6000);
+
+    if (this.settings.batchCreateReport && results.errors.length > 0) {
+      await this.createBatchErrorReport(results);
+    }
+  }
+
+  private async runFolderImportSilent(filePath: string, fileName: string, apiKey: string): Promise<void> {
+    const ext = path.extname(fileName).toLowerCase();
+    let meta: ExtractedContent;
+
+    if (ext === ".pdf") {
+      const buffer = fs.readFileSync(filePath);
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const fakeUrl = `file://${filePath}`;
+      meta = await extractPdfContent(arrayBuffer, fakeUrl, this.settings.maxChars, this.settings.pdfMaxPages);
+    } else {
+      const html = fs.readFileSync(filePath, "utf-8");
+      const fakeUrl = `file://${filePath}`;
+      meta = await extractFromHtml(html, fakeUrl, this.settings.maxChars);
+    }
+
+    const promptTemplate =
+      this.settings.useCustomPrompt && this.settings.customPrompt.trim()
+        ? this.settings.customPrompt
+        : undefined;
+
+    const defaultTags = normalizeTags(this.settings.defaultTags);
+
+    let note: string;
+    const isPdf = meta.contentType === "pdf";
+
+    const useNativeVision =
+      isPdf &&
+      this.settings.provider === "openai" &&
+      this.settings.pdfHandling === "native-vision" &&
+      isVisionModel(this.settings.model);
+
+    if (useNativeVision && isPdf) {
+      const pdfMeta = meta as ExtractedPdf;
+      note = await this.callPdfVisionWithRetries(apiKey, `file://${filePath}`, pdfMeta, promptTemplate, defaultTags);
+    } else {
+      note = await this.callModelWithRetries(apiKey, `file://${filePath}`, meta, promptTemplate, defaultTags);
+    }
+
+    const validated = ensureFrontmatterPresent(note);
+    const parts: string[] = [];
+    parts.push(validated);
+
+    if (this.settings.includeRaw) {
+      const rawHeader = isPdf ? "## Extracted PDF text (plaintext)" : "## Extracted article (plaintext)";
+      const rawBody = meta.text?.trim() ? meta.text.trim() : "_No text extracted._";
+      parts.push("", rawHeader, "", rawBody);
+    }
+
+    if (this.settings.includeLinks && meta.links.length) {
+      parts.push("", "## Extracted links");
+      parts.push(...meta.links.map(l => `- [${l.text || l.href}](${l.href})`));
+    }
+    if (this.settings.includeImages && meta.images.length) {
+      parts.push("", "## Extracted images");
+      parts.push(...meta.images.map(img => `- ![${img.alt || "image"}](${img.src})`));
+    }
+
+    const finalNote = parts.join("\n");
+    let title = meta.title;
+    if (!title || title === "document" || title === "article") {
+      title = path.parse(fileName).name;
+    }
+
+    await saveNoteToVault(
+      this.app.vault,
+      this.settings.outputFolder,
+      title,
       finalNote
     );
   }
